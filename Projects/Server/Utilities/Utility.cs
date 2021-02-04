@@ -1101,24 +1101,30 @@ namespace Server
             return total + bonus;
         }
 
+        /**
+         * Richard Durstenfeld (Algorithm P) variation of Fisher-Yates shuffle:
+         * Shuffles an array or list in-place in O(n) complexity
+         */
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Shuffle<T>(this IList<T> list)
         {
-            var count = list.Count;
+            var count = list.Count - 1;
             for (var i = 0; i < count; i++)
             {
-                var r = RandomMinMax(i, count - 1);
+                var r = RandomMinMax(i, count);
                 var swap = list[r];
                 list[r] = list[i];
                 list[i] = swap;
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Shuffle<T>(this Span<T> list)
         {
-            var count = list.Length;
+            var count = list.Length - 1;
             for (var i = 0; i < count; i++)
             {
-                var r = RandomMinMax(i, count - 1);
+                var r = RandomMinMax(i, count);
                 var swap = list[r];
                 list[r] = list[i];
                 list[i] = swap;
@@ -1126,43 +1132,19 @@ namespace Server
         }
 
         /**
-     * Gets a random sample from the source list.
-     * Not meant for unbounded lists. Does not shuffle or modify source.
-     */
-        public static T[] RandomSample<T>(this T[] source, int count)
+         * Gets a random sample from the source list.
+         * Not meant for unbounded lists. Does not shuffle or modify source.
+         */
+        public static T[] RandomSample<T>(this IList<T> source, int count)
         {
             if (count <= 0)
             {
                 return Array.Empty<T>();
             }
 
-            var length = source.Length;
-            Span<bool> list = stackalloc bool[length];
-            var sampleList = new T[count];
-
-            var i = 0;
-            do
-            {
-                var rand = Random(length);
-                if (!(list[rand] && (list[rand] = true)))
-                {
-                    sampleList[i++] = source[rand];
-                }
-            } while (i < count);
-
-            return sampleList;
-        }
-
-        public static List<T> RandomSample<T>(this List<T> source, int count)
-        {
-            if (count <= 0)
-            {
-                return new List<T>();
-            }
-
             var length = source.Count;
             Span<bool> list = stackalloc bool[length];
-            var sampleList = new List<T>(count);
+            var sampleList = GC.AllocateUninitializedArray<T>(count);
 
             var i = 0;
             do
