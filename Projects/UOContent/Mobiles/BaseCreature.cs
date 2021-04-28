@@ -3212,6 +3212,8 @@ namespace Server.Mobiles
                     Paragon.GiveArtifactTo(mob);
                 }
             }
+
+            EventSink.InvokeOnKilledBy(this, mob);
         }
 
         public override void OnDeath(Container c)

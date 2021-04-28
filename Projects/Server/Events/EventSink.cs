@@ -167,5 +167,14 @@ namespace Server
 
         public static void InvokeOnEnterRegion(Mobile m, Region oldRegion, Region newRegion) =>
             OnEnterRegion?.Invoke(m, oldRegion, newRegion);
+
+        public static event Action<Mobile, Item, Item, Item> ResourceHarvestSuccess;
+
+        public static void InvokeResourceHarvestSuccess(Mobile m, Item tool, Item item, Item bonusItem) =>
+            ResourceHarvestSuccess?.Invoke(m, tool, item, bonusItem);
+
+        public static event Action<Mobile, Mobile> OnKilledBy;
+        public static void InvokeOnKilledBy(Mobile killed, Mobile killedBy) =>
+            OnKilledBy?.Invoke(killed, killedBy);
     }
 }
