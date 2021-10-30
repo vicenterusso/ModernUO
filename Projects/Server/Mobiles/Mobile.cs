@@ -4463,8 +4463,8 @@ namespace Server
                 eable.Free();
 
                 const int cacheLength = OutgoingMobilePackets.MobileMovingPacketCacheByteLength;
-                var width = OutgoingMobilePackets.MobileMovingPacketLength;
-                var height = OutgoingMobilePackets.MobileMovingPacketCacheHeight;
+                const int width = OutgoingMobilePackets.MobileMovingPacketLength;
+                const int height = OutgoingMobilePackets.MobileMovingPacketCacheHeight;
 
                 var mobileMovingCache = stackalloc byte[cacheLength].AsSpan2D(height, width).InitializePackets();
 

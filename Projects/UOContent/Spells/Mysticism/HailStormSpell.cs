@@ -51,7 +51,6 @@ namespace Server.Spells.Mysticism
                 if (map != null)
                 {
                     var loc = new Point3D(p);
-
                     PlayEffect(loc, Caster.Map);
 
                     foreach (var m in map.GetMobilesInRange(loc, 2))

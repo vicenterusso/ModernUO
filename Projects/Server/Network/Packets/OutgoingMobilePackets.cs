@@ -35,10 +35,13 @@ namespace Server.Network
         public const int NewMobileAnimationPacketLength = 10;
         public const int MobileHealthbarPacketLength = 12;
         public const int MobileStatusCompactLength = 43;
-        public const int MobileStatusMaxLength = 121;
+        public const int MobileStatusLength = 70;
+        public const int MobileStatusAOSLength = 88;
+        public const int MobileStatusMLLength = 91;
+        public const int MobileStatusHSLength = 121;
 
         public static bool ExtendedStatus { get; set; }
-        
+
         public static void Initialize()
         {
             ExtendedStatus = ServerConfiguration.GetOrUpdateSetting("extendedStatus", false);
@@ -431,7 +434,7 @@ namespace Server.Network
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void CreateMobileStatusCompact(Span<byte> buffer, Mobile m, bool canBeRenamed) =>
-            CreateMobileStatus(buffer, null, m, 0, canBeRenamed);
+            CreateMobileStatus(buffer, m, 0, canBeRenamed);
 
         public static void SendMobileStatusCompact(this NetState ns, Mobile m, bool canBeRenamed)
         {
@@ -456,16 +459,18 @@ namespace Server.Network
                 return;
             }
 
-            Span<byte> buffer = stackalloc byte[MobileStatusMaxLength];
             int version;
+            int length;
 
             if (beholder != beheld)
             {
                 version = 0;
+                length = MobileStatusCompactLength;
             }
             else if (Core.HS && ns.ExtendedStatus)
             {
                 version = 6;
+                length = MobileStatusHSLength;
             }
             else if (Core.ML && ns.SupportsExpansion(Expansion.ML))
             {
@@ -473,24 +478,30 @@ namespace Server.Network
                  * For the ML era, the version value must be 5 if the original UO distribution
                  * is used and the client is not lower than version 5
                  */
-                version = ExtendedStatus ? 6 : 5;
+                version = 5;
+                length = MobileStatusMLLength;
+            }
+            else if (Core.AOS)
+            {
+                version = 4;
+                length = MobileStatusAOSLength;
             }
             else
             {
-                version = Core.AOS ? 4 : 3;
+                version = 3;
+                length = MobileStatusLength;
             }
 
-            var length = CreateMobileStatus(buffer, beholder, beheld, version, beheld.CanBeRenamedBy(beholder));
-            ns.Send(buffer[..length]);
+            Span<byte> buffer = stackalloc byte[length];
+            CreateMobileStatus(buffer, beheld, version, beheld.CanBeRenamedBy(beholder));
+            ns.Send(buffer);
         }
 
-        public static int CreateMobileStatus(
-            Span<byte> buffer, Mobile beholder, Mobile beheld, int version, bool canBeRenamed
-        )
+        public static void CreateMobileStatus(Span<byte> buffer, Mobile beheld, int version, bool canBeRenamed)
         {
             if (buffer[0] != 0)
             {
-                return buffer.Length;
+                return;
             }
 
             var name = beheld.Name ?? "";
@@ -507,7 +518,7 @@ namespace Server.Network
             if (version <= 0)
             {
                 writer.WritePacketLength();
-                return writer.Position;
+                return;
             }
 
             writer.Write(beheld.Female);
@@ -563,7 +574,6 @@ namespace Server.Network
             }
 
             writer.WritePacketLength();
-            return writer.Position;
         }
 
         public static void SendMobileUpdate(this NetState ns, Mobile m)
