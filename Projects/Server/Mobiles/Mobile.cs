@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using Microsoft.Toolkit.HighPerformance;
 using Server.Accounting;
 using Server.Buffers;
 using Server.ContextMenus;
@@ -2958,13 +2957,12 @@ namespace Server
                 ? OutgoingVirtualHairPackets.RemovePacketLength
                 : OutgoingVirtualHairPackets.EquipUpdatePacketLength;
 
-            Span<byte> facialhairPacket = stackalloc byte[facialHairLength].InitializePacket();
+            Span<byte> facialHairPacket = stackalloc byte[facialHairLength].InitializePacket();
 
             const int cacheLength = OutgoingMobilePackets.MobileMovingPacketCacheByteLength;
             const int width = OutgoingMobilePackets.MobileMovingPacketLength;
-            const int height = OutgoingMobilePackets.MobileMovingPacketCacheHeight;
 
-            var mobileMovingCache = stackalloc byte[cacheLength].AsSpan2D(height, width).InitializePackets();
+            var mobileMovingCache = stackalloc byte[cacheLength].InitializePackets(width);
 
             var ourState = m_NetState;
 
@@ -3066,12 +3064,12 @@ namespace Server
                 {
                     if (removeFacialHair)
                     {
-                        OutgoingVirtualHairPackets.CreateRemoveHairPacket(facialhairPacket, facialHairSerial);
+                        OutgoingVirtualHairPackets.CreateRemoveHairPacket(facialHairPacket, facialHairSerial);
                     }
                     else
                     {
                         OutgoingVirtualHairPackets.CreateHairEquipUpdatePacket(
-                            facialhairPacket,
+                            facialHairPacket,
                             this,
                             facialHairSerial,
                             FacialHairItemID,
@@ -3079,7 +3077,7 @@ namespace Server
                             Layer.FacialHair
                         );
                     }
-                    ourState.Send(facialhairPacket);
+                    ourState.Send(facialHairPacket);
                 }
 
                 if (sendOPLUpdate)
@@ -3205,12 +3203,12 @@ namespace Server
                 {
                     if (removeFacialHair)
                     {
-                        OutgoingVirtualHairPackets.CreateRemoveHairPacket(facialhairPacket, facialHairSerial);
+                        OutgoingVirtualHairPackets.CreateRemoveHairPacket(facialHairPacket, facialHairSerial);
                     }
                     else
                     {
                         OutgoingVirtualHairPackets.CreateHairEquipUpdatePacket(
-                            facialhairPacket,
+                            facialHairPacket,
                             this,
                             facialHairSerial,
                             FacialHairItemID,
@@ -3218,7 +3216,7 @@ namespace Server
                             Layer.FacialHair
                         );
                     }
-                    state.Send(facialhairPacket);
+                    state.Send(facialHairPacket);
                 }
 
                 SendOPLPacketTo(state);
@@ -4464,9 +4462,8 @@ namespace Server
 
                 const int cacheLength = OutgoingMobilePackets.MobileMovingPacketCacheByteLength;
                 const int width = OutgoingMobilePackets.MobileMovingPacketLength;
-                const int height = OutgoingMobilePackets.MobileMovingPacketCacheHeight;
 
-                var mobileMovingCache = stackalloc byte[cacheLength].AsSpan2D(height, width).InitializePackets();
+                var mobileMovingCache = stackalloc byte[cacheLength].InitializePackets(width);
 
                 foreach (var m in m_MoveClientList)
                 {
