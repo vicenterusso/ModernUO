@@ -39,13 +39,6 @@ namespace Server.Network
         public const int MobileStatusMLLength = 91;
         public const int MobileStatusHSLength = 121;
 
-        public static bool ExtendedStatus { get; set; }
-
-        public static void Initialize()
-        {
-            ExtendedStatus = ServerConfiguration.GetOrUpdateSetting("extendedStatus", false);
-        }
-
         public static void CreateBondedStatus(Span<byte> buffer, Serial serial, bool bonded)
         {
             if (buffer[0] != 0)
@@ -467,7 +460,7 @@ namespace Server.Network
                 version = 0;
                 length = MobileStatusCompactLength;
             }
-            else if (Core.HS && ns.ExtendedStatus)
+            else if (ns.ExtendedStatus)
             {
                 version = 6;
                 length = MobileStatusHSLength;
