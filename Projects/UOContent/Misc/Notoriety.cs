@@ -559,7 +559,8 @@ namespace Server.Misc
                 return false;
             }
 
-            return m is not BaseCreature { Deleted: not true, Controlled: true, ControlMaster: { } } c || !house.IsFriend(c.ControlMaster);
+            return m is not BaseCreature c || c.Deleted || !c.Controlled || c.ControlMaster == null ||
+                   !house.IsFriend(c.ControlMaster);
         }
 
         public static bool IsPet(BaseCreature c) => c?.Controlled == true;
