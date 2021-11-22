@@ -4,19 +4,27 @@ using Server.Mobiles;
 
 namespace Server.Items
 {
-    public abstract class FillableContainer : LockableContainer
+    [Serializable(2, false)]
+    public abstract partial class FillableContainer : LockableContainer
     {
-        protected FillableContent m_Content;
+        [SerializableField(0)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        protected FillableContentType _contentType;
 
-        protected DateTime m_NextRespawnTime;
-        protected Timer _respawnTimer;
+        [TimerDrift]
+        [SerializableField(1)]
+        private Timer _respawnTimer;
+
+        [DeserializeTimerField(1)]
+        private void DeserializeRespawnTimer(TimeSpan delay)
+        {
+            if (delay > TimeSpan.MinValue)
+            {
+                _respawnTimer = Timer.DelayCall(delay, Respawn);
+            }
+        }
 
         public FillableContainer(int itemID) : base(itemID) => Movable = false;
-
-        public FillableContainer(Serial serial)
-            : base(serial)
-        {
-        }
 
         public virtual int MinRespawnMinutes => 60;
         public virtual int MaxRespawnMinutes => 90;
@@ -27,36 +35,16 @@ namespace Server.Items
         public virtual int SpawnThreshold => 2;
 
         [CommandProperty(AccessLevel.GameMaster)]
-        public DateTime NextRespawnTime => m_NextRespawnTime;
+        public DateTime NextRespawnTime => _respawnTimer.Next;
 
-        [CommandProperty(AccessLevel.GameMaster)]
-        public FillableContentType ContentType
+        protected void ClearContents()
         {
-            get => FillableContent.Lookup(m_Content);
-            set => Content = FillableContent.Lookup(value);
-        }
-
-        public FillableContent Content
-        {
-            get => m_Content;
-            set
+            for (var i = Items.Count - 1; i >= 0; --i)
             {
-                if (m_Content == value)
+                if (i < Items.Count)
                 {
-                    return;
+                    Items[i].Delete();
                 }
-
-                m_Content = value;
-
-                for (var i = Items.Count - 1; i >= 0; --i)
-                {
-                    if (i < Items.Count)
-                    {
-                        Items[i].Delete();
-                    }
-                }
-
-                Respawn();
             }
         }
 
@@ -74,14 +62,14 @@ namespace Server.Items
 
         public virtual void AcquireContent()
         {
-            if (m_Content != null)
+            if (_contentType != FillableContentType.None)
             {
                 return;
             }
 
-            m_Content = FillableContent.Acquire(GetWorldLocation(), Map);
+            _contentType = FillableContent.Acquire(GetWorldLocation(), Map);
 
-            if (m_Content != null)
+            if (_contentType != FillableContentType.None)
             {
                 Respawn();
             }
@@ -114,7 +102,7 @@ namespace Server.Items
 
         public void CheckRespawn()
         {
-            var canSpawn = m_Content != null && !Deleted && GetItemsCount() <= SpawnThreshold && !Movable &&
+            var canSpawn = _contentType != FillableContentType.None && !Deleted && GetItemsCount() <= SpawnThreshold && !Movable &&
                            Parent == null && !IsLockedDown && !IsSecure;
 
             if (canSpawn)
@@ -123,8 +111,6 @@ namespace Server.Items
                 {
                     var mins = Utility.RandomMinMax(MinRespawnMinutes, MaxRespawnMinutes);
                     var delay = TimeSpan.FromMinutes(mins);
-
-                    m_NextRespawnTime = Core.Now + delay;
                     _respawnTimer = Timer.DelayCall(delay, Respawn);
                 }
             }
@@ -140,27 +126,29 @@ namespace Server.Items
             _respawnTimer?.Stop();
             _respawnTimer = null;
 
-            if (m_Content == null || Deleted)
+            if (_contentType != FillableContentType.None || Deleted)
             {
                 return;
             }
 
             GenerateContent();
 
+            var level = FillableContent.Lookup(_contentType).Level;
+
             if (IsLockable)
             {
                 Locked = true;
 
-                var difficulty = (m_Content.Level - 1) * 30;
+                var difficulty = (level - 1) * 30;
 
                 LockLevel = difficulty - 10;
                 MaxLockLevel = difficulty + 30;
                 RequiredSkill = difficulty;
             }
 
-            if (IsTrappable && (m_Content.Level > 1 || Utility.Random(5) < 4))
+            if (IsTrappable && (level > 1 || Utility.Random(5) < 4))
             {
-                if (m_Content.Level > Utility.Random(5))
+                if (level > Utility.Random(5))
                 {
                     TrapType = TrapType.PoisonTrap;
                 }
@@ -169,8 +157,8 @@ namespace Server.Items
                     TrapType = TrapType.ExplosionTrap;
                 }
 
-                TrapPower = m_Content.Level * Utility.RandomMinMax(10, 30);
-                TrapLevel = m_Content.Level;
+                TrapPower = level * Utility.RandomMinMax(10, 30);
+                TrapLevel = level;
             }
             else
             {
@@ -198,16 +186,18 @@ namespace Server.Items
 
         public virtual void GenerateContent()
         {
-            if (m_Content == null || Deleted)
+            if (_contentType != FillableContentType.None || Deleted)
             {
                 return;
             }
+
+            var content = FillableContent.Lookup(_contentType);
 
             var toSpawn = GetSpawnCount();
 
             for (var i = 0; i < toSpawn; ++i)
             {
-                var item = m_Content.Construct();
+                var item = content.Construct();
 
                 if (item == null)
                 {
@@ -233,70 +223,32 @@ namespace Server.Items
             }
         }
 
-        public override void Serialize(IGenericWriter writer)
+        private void Deserialize(IGenericReader reader, int version)
         {
-            base.Serialize(writer);
-
-            writer.WriteEncodedInt(1); // version
-
-            writer.Write((int)ContentType);
-
-            if (_respawnTimer?.Running == true)
+            _contentType = (FillableContentType)reader.ReadInt();
+            var respawnTime = reader.ReadDeltaTime();
+            if (respawnTime > DateTime.MinValue)
             {
-                writer.Write(true);
-                writer.WriteDeltaTime(m_NextRespawnTime);
-            }
-            else
-            {
-                writer.Write(false);
+                DeserializeRespawnTimer(Core.Now - respawnTime);
             }
         }
 
-        public override void Deserialize(IGenericReader reader)
+        [AfterDeserialization]
+        private void AfterDeserialization()
         {
-            base.Deserialize(reader);
-
-            var version = reader.ReadEncodedInt();
-
-            switch (version)
+            if (_respawnTimer?.Running != true)
             {
-                case 1:
-                    {
-                        m_Content = FillableContent.Lookup((FillableContentType)reader.ReadInt());
-                        goto case 0;
-                    }
-                case 0:
-                    {
-                        if (reader.ReadBool())
-                        {
-                            m_NextRespawnTime = reader.ReadDeltaTime();
-
-                            var delay = m_NextRespawnTime - Core.Now;
-                            Timer.DelayCall(delay, Respawn);
-                        }
-                        else
-                        {
-                            CheckRespawn();
-                        }
-
-                        break;
-                    }
+                CheckRespawn();
             }
         }
     }
 
     [Flippable(0xA97, 0xA99, 0xA98, 0xA9A, 0xA9B, 0xA9C)]
-    public class LibraryBookcase : FillableContainer
+    [Serializable(0)]
+    public partial class LibraryBookcase : FillableContainer
     {
         [Constructible]
-        public LibraryBookcase()
-            : base(0xA97) =>
-            Weight = 1.0;
-
-        public LibraryBookcase(Serial serial)
-            : base(serial)
-        {
-        }
+        public LibraryBookcase() : base(0xA97) => Weight = 1.0;
 
         public override bool IsLockable => false;
         public override int SpawnThreshold => 5;
@@ -305,291 +257,88 @@ namespace Server.Items
 
         public override void AcquireContent()
         {
-            if (m_Content != null)
+            if (_contentType != FillableContentType.None)
             {
                 return;
             }
 
-            m_Content = FillableContent.Library;
-
-            if (m_Content != null)
-            {
-                Respawn();
-            }
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.WriteEncodedInt(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadEncodedInt();
-
-            if (version == 0 && m_Content == null)
-            {
-                Timer.StartTimer(AcquireContent);
-            }
+            _contentType = FillableContentType.Library;
+            Respawn();
         }
     }
 
     [Flippable(0xE3D, 0xE3C)]
-    public class FillableLargeCrate : FillableContainer
+    [Serializable(0)]
+    public partial class FillableLargeCrate : FillableContainer
     {
         [Constructible]
-        public FillableLargeCrate()
-            : base(0xE3D) =>
-            Weight = 1.0;
-
-        public FillableLargeCrate(Serial serial)
-            : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.WriteEncodedInt(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadEncodedInt();
-        }
+        public FillableLargeCrate() : base(0xE3D) => Weight = 1.0;
     }
 
     [Flippable(0x9A9, 0xE7E)]
-    public class FillableSmallCrate : FillableContainer
+    [Serializable(0)]
+    public partial class FillableSmallCrate : FillableContainer
     {
         [Constructible]
-        public FillableSmallCrate()
-            : base(0x9A9) =>
-            Weight = 1.0;
-
-        public FillableSmallCrate(Serial serial)
-            : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.WriteEncodedInt(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadEncodedInt();
-        }
+        public FillableSmallCrate() : base(0x9A9) => Weight = 1.0;
     }
 
     [Flippable(0x9AA, 0xE7D)]
-    public class FillableWoodenBox : FillableContainer
+    [Serializable(0)]
+    public partial class FillableWoodenBox : FillableContainer
     {
         [Constructible]
-        public FillableWoodenBox()
-            : base(0x9AA) =>
-            Weight = 4.0;
-
-        public FillableWoodenBox(Serial serial)
-            : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-        }
+        public FillableWoodenBox() : base(0x9AA) => Weight = 4.0;
     }
 
     [Flippable(0x9A8, 0xE80)]
-    public class FillableMetalBox : FillableContainer
+    [Serializable(0)]
+    public partial class FillableMetalBox : FillableContainer
     {
         [Constructible]
-        public FillableMetalBox()
-            : base(0x9A8)
+        public FillableMetalBox() : base(0x9A8)
         {
-        }
-
-        public FillableMetalBox(Serial serial)
-            : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.WriteEncodedInt(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadEncodedInt();
-
-            if (version == 0 && Weight == 3)
-            {
-                Weight = -1;
-            }
         }
     }
 
-    public class FillableBarrel : FillableContainer
+    [Serializable(0)]
+    public partial class FillableBarrel : FillableContainer
     {
         [Constructible]
-        public FillableBarrel()
-            : base(0xE77)
+        public FillableBarrel() : base(0xE77)
         {
-        }
-
-        public FillableBarrel(Serial serial)
-            : base(serial)
-        {
-        }
-
-        public override bool IsLockable => false;
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.WriteEncodedInt(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadEncodedInt();
-
-            if (version == 0 && Weight == 25)
-            {
-                Weight = -1;
-            }
         }
     }
 
     [Flippable(0x9AB, 0xE7C)]
-    public class FillableMetalChest : FillableContainer
+    [Serializable(0, false)]
+    public partial class FillableMetalChest : FillableContainer
     {
         [Constructible]
-        public FillableMetalChest()
-            : base(0x9AB)
+        public FillableMetalChest() : base(0x9AB)
         {
-        }
-
-        public FillableMetalChest(Serial serial)
-            : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 25)
-            {
-                Weight = -1;
-            }
         }
     }
 
     [Flippable(0xE41, 0xE40)]
-    public class FillableMetalGoldenChest : FillableContainer
+    [Serializable(0, false)]
+    public partial class FillableMetalGoldenChest : FillableContainer
     {
         [Constructible]
         public FillableMetalGoldenChest()
             : base(0xE41)
         {
         }
-
-        public FillableMetalGoldenChest(Serial serial)
-            : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 25)
-            {
-                Weight = -1;
-            }
-        }
     }
 
     [Flippable(0xE43, 0xE42)]
-    public class FillableWoodenChest : FillableContainer
+    [Serializable(0, false)]
+    public partial class FillableWoodenChest : FillableContainer
     {
         [Constructible]
         public FillableWoodenChest()
             : base(0xE43)
         {
-        }
-
-        public FillableWoodenChest(Serial serial)
-            : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 2)
-            {
-                Weight = -1;
-            }
         }
     }
 
@@ -661,8 +410,7 @@ namespace Server.Items
 
     public class FillableBvrge : FillableEntry
     {
-        public FillableBvrge(Type type, BeverageType content)
-            : this(1, type, content)
+        public FillableBvrge(Type type, BeverageType content) : this(1, type, content)
         {
         }
 
@@ -1486,7 +1234,7 @@ namespace Server.Items
             }
         );
 
-        private static Dictionary<Type, FillableContent> m_AcquireTable;
+        private static Dictionary<Type, FillableContentType> m_AcquireTable;
 
         private static readonly FillableContent[] m_ContentTypes =
         {
@@ -1566,16 +1314,18 @@ namespace Server.Items
             return (FillableContentType)Array.IndexOf(m_ContentTypes, content);
         }
 
-        public static FillableContent Acquire(Point3D loc, Map map)
+        public static FillableContentType Acquire(Point3D loc, Map map)
         {
+            FillableContentType content = FillableContentType.None;
+
             if (map == null || map == Map.Internal)
             {
-                return null;
+                return content;
             }
 
             if (m_AcquireTable == null)
             {
-                m_AcquireTable = new Dictionary<Type, FillableContent>();
+                m_AcquireTable = new Dictionary<Type, FillableContentType>();
 
                 for (var i = 0; i < m_ContentTypes.Length; ++i)
                 {
@@ -1583,13 +1333,12 @@ namespace Server.Items
 
                     for (var j = 0; j < fill.Vendors.Length; ++j)
                     {
-                        m_AcquireTable[fill.Vendors[j]] = fill;
+                        m_AcquireTable[fill.Vendors[j]] = fill.TypeID;
                     }
                 }
             }
 
             Mobile nearest = null;
-            FillableContent content = null;
 
             foreach (var mob in map.GetMobilesInRange(loc, 20))
             {
