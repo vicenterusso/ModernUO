@@ -6,6 +6,7 @@ using Server.Network;
 
 namespace Server.Items
 {
+    [ManualDirtyChecking]
     public abstract class BaseContainer : Container
     {
         public BaseContainer(int itemID) : base(itemID)
@@ -158,7 +159,8 @@ namespace Server.Items
         }
     }
 
-    public class CreatureBackpack : Backpack // Used on BaseCreature
+    [Serializable(0, false)]
+    public partial class CreatureBackpack : Backpack // Used on BaseCreature
     {
         [Constructible]
         public CreatureBackpack(string name)
@@ -167,10 +169,6 @@ namespace Server.Items
             Layer = Layer.Backpack;
             Hue = 5;
             Weight = 3.0;
-        }
-
-        public CreatureBackpack(Serial serial) : base(serial)
-        {
         }
 
         public override void AddNameProperty(ObjectPropertyList list)
@@ -209,38 +207,16 @@ namespace Server.Items
         public override bool OnDragDropInto(Mobile from, Item item, Point3D p) => false;
 
         public override bool TryDropItem(Mobile from, Item dropped, bool sendFullMessage) => false;
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0)
-            {
-                Weight = 13.0;
-            }
-        }
     }
 
-    public class StrongBackpack : Backpack // Used on Pack animals
+    [Serializable(0, false)]
+    public partial class StrongBackpack : Backpack // Used on Pack animals
     {
         [Constructible]
         public StrongBackpack()
         {
             Layer = Layer.Backpack;
             Weight = 13.0;
-        }
-
-        public StrongBackpack(Serial serial) : base(serial)
-        {
         }
 
         public override int DefaultMaxWeight => 1600;
@@ -251,38 +227,16 @@ namespace Server.Items
         public override bool CheckContentDisplay(Mobile from) =>
             RootParent is BaseCreature creature && creature.Controlled && creature.ControlMaster == from ||
             base.CheckContentDisplay(from);
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0)
-            {
-                Weight = 13.0;
-            }
-        }
     }
 
-    public class Backpack : BaseContainer, IDyable
+    [Serializable(0, false)]
+    public partial class Backpack : BaseContainer, IDyable
     {
         [Constructible]
         public Backpack() : base(0xE75)
         {
             Layer = Layer.Backpack;
             Weight = 3.0;
-        }
-
-        public Backpack(Serial serial) : base(serial)
-        {
         }
 
         public override int DefaultMaxWeight
@@ -309,58 +263,19 @@ namespace Server.Items
 
             return true;
         }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && ItemID == 0x9B2)
-            {
-                ItemID = 0xE75;
-            }
-        }
     }
 
-    public class Pouch : TrappableContainer
+    [Serializable(0, false)]
+    public partial class Pouch : TrappableContainer
     {
         [Constructible]
         public Pouch() : base(0xE79) => Weight = 1.0;
-
-        public Pouch(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-        }
     }
 
-    public abstract class BaseBagBall : BaseContainer, IDyable
+    [Serializable(0, false)]
+    public abstract partial class BaseBagBall : BaseContainer, IDyable
     {
         public BaseBagBall(int itemID) : base(itemID) => Weight = 1.0;
-
-        public BaseBagBall(Serial serial) : base(serial)
-        {
-        }
 
         public bool Dye(Mobile from, DyeTub sender)
         {
@@ -373,82 +288,31 @@ namespace Server.Items
 
             return true;
         }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-        }
     }
 
-    public class SmallBagBall : BaseBagBall
+    [Serializable(0, false)]
+    public partial class SmallBagBall : BaseBagBall
     {
         [Constructible]
         public SmallBagBall() : base(0x2256)
         {
         }
-
-        public SmallBagBall(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-        }
     }
 
-    public class LargeBagBall : BaseBagBall
+    [Serializable(0, false)]
+    public partial class LargeBagBall : BaseBagBall
     {
         [Constructible]
         public LargeBagBall() : base(0x2257)
         {
         }
-
-        public LargeBagBall(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-        }
     }
 
-    public class Bag : BaseContainer, IDyable
+    [Serializable(0, false)]
+    public partial class Bag : BaseContainer, IDyable
     {
         [Constructible]
         public Bag() : base(0xE76) => Weight = 2.0;
-
-        public Bag(Serial serial) : base(serial)
-        {
-        }
 
         public bool Dye(Mobile from, DyeTub sender)
         {
@@ -461,534 +325,163 @@ namespace Server.Items
 
             return true;
         }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-        }
     }
 
-    public class Barrel : BaseContainer
+    [Serializable(0, false)]
+    public partial class Barrel : BaseContainer
     {
         [Constructible]
         public Barrel() : base(0xE77) => Weight = 25.0;
-
-        public Barrel(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (Weight == 0.0)
-            {
-                Weight = 25.0;
-            }
-        }
     }
 
-    public class Keg : BaseContainer
+    [Serializable(0, false)]
+    public partial class Keg : BaseContainer
     {
         [Constructible]
         public Keg() : base(0xE7F) => Weight = 15.0;
-
-        public Keg(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-        }
     }
 
-    public class PicnicBasket : BaseContainer
+    [Serializable(0, false)]
+    public partial class PicnicBasket : BaseContainer
     {
         [Constructible]
         public PicnicBasket() : base(0xE7A) => Weight = 2.0;
-
-        public PicnicBasket(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-        }
     }
 
-    public class Basket : BaseContainer
+    [Serializable(0, false)]
+    public partial class Basket : BaseContainer
     {
         [Constructible]
         public Basket() : base(0x990) => Weight = 1.0;
-
-        public Basket(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-        }
     }
 
     [Furniture]
     [Flippable(0x9AA, 0xE7D)]
-    public class WoodenBox : LockableContainer
+    [Serializable(0, false)]
+    public partial class WoodenBox : LockableContainer
     {
         [Constructible]
         public WoodenBox() : base(0x9AA) => Weight = 4.0;
-
-        public WoodenBox(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-        }
     }
 
     [Furniture]
     [Flippable(0x9A9, 0xE7E)]
-    public class SmallCrate : LockableContainer
+    [Serializable(0, false)]
+    public partial class SmallCrate : LockableContainer
     {
         [Constructible]
         public SmallCrate() : base(0x9A9) => Weight = 2.0;
-
-        public SmallCrate(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (Weight == 4.0)
-            {
-                Weight = 2.0;
-            }
-        }
     }
 
     [Furniture]
     [Flippable(0xE3F, 0xE3E)]
-    public class MediumCrate : LockableContainer
+    [Serializable(0, false)]
+    public partial class MediumCrate : LockableContainer
     {
         [Constructible]
         public MediumCrate() : base(0xE3F) => Weight = 2.0;
-
-        public MediumCrate(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (Weight == 6.0)
-            {
-                Weight = 2.0;
-            }
-        }
     }
 
     [Furniture]
     [Flippable(0xE3D, 0xE3C)]
-    public class LargeCrate : LockableContainer
+    [Serializable(0, false)]
+    public partial class LargeCrate : LockableContainer
     {
         [Constructible]
         public LargeCrate() : base(0xE3D) => Weight = 1.0;
-
-        public LargeCrate(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (Weight == 8.0)
-            {
-                Weight = 1.0;
-            }
-        }
     }
 
-    [DynamicFlipping, Flippable(0x9A8, 0xE80)]
-    public class MetalBox : LockableContainer
+    [DynamicFlipping]
+    [Flippable(0x9A8, 0xE80)]
+    [Serializable(0, false)]
+    public partial class MetalBox : LockableContainer
     {
         [Constructible]
         public MetalBox() : base(0x9A8)
         {
         }
-
-        public MetalBox(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 3)
-            {
-                Weight = -1;
-            }
-        }
     }
 
-    [DynamicFlipping, Flippable(0x9AB, 0xE7C)]
-    public class MetalChest : LockableContainer
+    [DynamicFlipping]
+    [Flippable(0x9AB, 0xE7C)]
+    [Serializable(0, false)]
+    public partial class MetalChest : LockableContainer
     {
         [Constructible]
         public MetalChest() : base(0x9AB)
         {
         }
-
-        public MetalChest(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 25)
-            {
-                Weight = -1;
-            }
-        }
     }
 
     [DynamicFlipping, Flippable(0xE41, 0xE40)]
-    public class MetalGoldenChest : LockableContainer
+    [Serializable(0, false)]
+    public partial class MetalGoldenChest : LockableContainer
     {
         [Constructible]
         public MetalGoldenChest() : base(0xE41)
         {
         }
-
-        public MetalGoldenChest(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 25)
-            {
-                Weight = -1;
-            }
-        }
     }
 
     [Furniture]
     [Flippable(0xe43, 0xe42)]
-    public class WoodenChest : LockableContainer
+    [Serializable(0, false)]
+    public partial class WoodenChest : LockableContainer
     {
         [Constructible]
         public WoodenChest() : base(0xe43) => Weight = 2.0;
-
-        public WoodenChest(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (Weight == 15.0)
-            {
-                Weight = 2.0;
-            }
-        }
     }
 
     [Furniture]
     [Flippable(0x280B, 0x280C)]
-    public class PlainWoodenChest : LockableContainer
+    [Serializable(0, false)]
+    public partial class PlainWoodenChest : LockableContainer
     {
         [Constructible]
         public PlainWoodenChest() : base(0x280B)
         {
         }
-
-        public PlainWoodenChest(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 15)
-            {
-                Weight = -1;
-            }
-        }
     }
 
     [Furniture]
     [Flippable(0x280D, 0x280E)]
-    public class OrnateWoodenChest : LockableContainer
+    [Serializable(0, false)]
+    public partial class OrnateWoodenChest : LockableContainer
     {
         [Constructible]
         public OrnateWoodenChest() : base(0x280D)
         {
         }
-
-        public OrnateWoodenChest(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 15)
-            {
-                Weight = -1;
-            }
-        }
     }
 
     [Furniture]
     [Flippable(0x280F, 0x2810)]
-    public class GildedWoodenChest : LockableContainer
+    [Serializable(0, false)]
+    public partial class GildedWoodenChest : LockableContainer
     {
         [Constructible]
         public GildedWoodenChest() : base(0x280F)
         {
         }
-
-        public GildedWoodenChest(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 15)
-            {
-                Weight = -1;
-            }
-        }
     }
 
     [Furniture]
     [Flippable(0x2811, 0x2812)]
-    public class WoodenFootLocker : LockableContainer
+    [Serializable(0, false)]
+    public partial class WoodenFootLocker : LockableContainer
     {
         [Constructible]
         public WoodenFootLocker() : base(0x2811) => GumpID = 0x10B;
-
-        public WoodenFootLocker(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(2); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 15)
-            {
-                Weight = -1;
-            }
-
-            if (version < 2)
-            {
-                GumpID = 0x10B;
-            }
-        }
     }
 
     [Furniture]
     [Flippable(0x2813, 0x2814)]
-    public class FinishedWoodenChest : LockableContainer
+    [Serializable(0, false)]
+    public partial class FinishedWoodenChest : LockableContainer
     {
         [Constructible]
         public FinishedWoodenChest() : base(0x2813)
         {
-        }
-
-        public FinishedWoodenChest(Serial serial) : base(serial)
-        {
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(1); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            if (version == 0 && Weight == 15)
-            {
-                Weight = -1;
-            }
         }
     }
 

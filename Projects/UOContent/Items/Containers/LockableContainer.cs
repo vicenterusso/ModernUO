@@ -4,22 +4,14 @@ using Server.Network;
 
 namespace Server.Items
 {
-    public abstract class LockableContainer : TrappableContainer, ILockable, ILockpickable, ICraftable, IShipwreckedItem
+    [Serializable(0, false)]
+    public abstract partial class LockableContainer : TrappableContainer, ILockable, ILockpickable, ICraftable, IShipwreckedItem
     {
-        private bool m_Locked;
-
         public LockableContainer(int itemID) : base(itemID) => MaxLockLevel = 100;
 
-        public LockableContainer(Serial serial) : base(serial)
-        {
-        }
+        public override bool TrapOnOpen => !_trapOnLockpick;
 
-        public override bool TrapOnOpen => !TrapOnLockpick;
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public bool TrapOnLockpick { get; set; }
-
-        public override bool DisplaysContent => !m_Locked;
+        public override bool DisplaysContent => !_locked;
 
         public int OnCraft(
             int quality, bool makersMark, Mobile from, CraftSystem craftSystem, Type typeRes, BaseTool tool,
@@ -32,34 +24,15 @@ namespace Server.Items
 
                 var key = new Key(KeyType.Copper, Key.RandomValue());
 
-                KeyValue = key.KeyValue;
+                _keyValue = key.KeyValue;
                 DropItem(key);
 
                 var tinkering = from.Skills.Tinkering.Value;
                 var level = (int)(tinkering * 0.8);
 
-                RequiredSkill = level - 4;
-                LockLevel = level - 14;
-                MaxLockLevel = level + 35;
-
-                if (LockLevel == 0)
-                {
-                    LockLevel = -1;
-                }
-                else if (LockLevel > 95)
-                {
-                    LockLevel = 95;
-                }
-
-                if (RequiredSkill > 95)
-                {
-                    RequiredSkill = 95;
-                }
-
-                if (MaxLockLevel > 95)
-                {
-                    MaxLockLevel = 95;
-                }
+                _requiredSkill = Math.Min(level - 4, 95);
+                _maxLockLevel = Math.Min(level + 35, 95);
+                _lockLevel = Math.Clamp(level - 14, 0, 95);
             }
             else
             {
@@ -70,147 +43,69 @@ namespace Server.Items
         }
 
         [CommandProperty(AccessLevel.GameMaster)]
+        public Mobile Picker { get; set; }
+
+        [SerializableField(0)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private bool _isShipwreckedItem;
+
+        [SerializableField(1)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private bool _trapOnLockpick;
+
+        [SerializableField(2)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private int _requiredSkill;
+
+        [SerializableField(3)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private int _maxLockLevel;
+
+        [SerializableField(4)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private uint _keyValue;
+
+        [SerializableField(5)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private int _lockLevel;
+
+        private bool _locked;
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        [SerializableField(6)]
         public virtual bool Locked
         {
-            get => m_Locked;
+            get => _locked;
             set
             {
-                m_Locked = value;
+                _locked = value;
 
-                if (m_Locked)
+                if (_locked)
                 {
                     Picker = null;
                 }
 
                 InvalidateProperties();
+                this.MarkDirty();
             }
         }
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public uint KeyValue { get; set; }
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public Mobile Picker { get; set; }
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public int MaxLockLevel { get; set; }
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public int LockLevel { get; set; }
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public int RequiredSkill { get; set; }
 
         public virtual void LockPick(Mobile from)
         {
             Locked = false;
             Picker = from;
 
-            if (TrapOnLockpick && ExecuteTrap(from))
+            if (_trapOnLockpick && ExecuteTrap(from))
             {
-                TrapOnLockpick = false;
+                _trapOnLockpick = false;
             }
         }
 
-        [CommandProperty(AccessLevel.GameMaster)]
-        public bool IsShipwreckedItem { get; set; }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(6); // version
-
-            writer.Write(IsShipwreckedItem);
-
-            writer.Write(TrapOnLockpick);
-
-            writer.Write(RequiredSkill);
-
-            writer.Write(MaxLockLevel);
-
-            writer.Write(KeyValue);
-            writer.Write(LockLevel);
-            writer.Write(m_Locked);
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            switch (version)
-            {
-                case 6:
-                    {
-                        IsShipwreckedItem = reader.ReadBool();
-
-                        goto case 5;
-                    }
-                case 5:
-                    {
-                        TrapOnLockpick = reader.ReadBool();
-
-                        goto case 4;
-                    }
-                case 4:
-                    {
-                        RequiredSkill = reader.ReadInt();
-
-                        goto case 3;
-                    }
-                case 3:
-                    {
-                        MaxLockLevel = reader.ReadInt();
-
-                        goto case 2;
-                    }
-                case 2:
-                    {
-                        KeyValue = reader.ReadUInt();
-
-                        goto case 1;
-                    }
-                case 1:
-                    {
-                        LockLevel = reader.ReadInt();
-
-                        goto case 0;
-                    }
-                case 0:
-                    {
-                        if (version < 3)
-                        {
-                            MaxLockLevel = 100;
-                        }
-
-                        if (version < 4)
-                        {
-                            if (MaxLockLevel - LockLevel == 40)
-                            {
-                                RequiredSkill = LockLevel + 6;
-                                LockLevel = RequiredSkill - 10;
-                                MaxLockLevel = RequiredSkill + 39;
-                            }
-                            else
-                            {
-                                RequiredSkill = LockLevel;
-                            }
-                        }
-
-                        m_Locked = reader.ReadBool();
-
-                        break;
-                    }
-            }
-        }
-
-        public override bool CheckContentDisplay(Mobile from) => !m_Locked && base.CheckContentDisplay(from);
+        public override bool CheckContentDisplay(Mobile from) => !_locked && base.CheckContentDisplay(from);
 
         public override bool TryDropItem(Mobile from, Item dropped, bool sendFullMessage)
         {
-            if (from.AccessLevel < AccessLevel.GameMaster && m_Locked)
+            if (from.AccessLevel < AccessLevel.GameMaster && _locked)
             {
                 from.SendLocalizedMessage(501747); // It appears to be locked.
                 return false;
@@ -221,7 +116,7 @@ namespace Server.Items
 
         public override bool OnDragDropInto(Mobile from, Item item, Point3D p)
         {
-            if (from.AccessLevel < AccessLevel.GameMaster && m_Locked)
+            if (from.AccessLevel < AccessLevel.GameMaster && _locked)
             {
                 from.SendLocalizedMessage(501747); // It appears to be locked.
                 return false;
@@ -230,20 +125,9 @@ namespace Server.Items
             return base.OnDragDropInto(from, item, p);
         }
 
-        public override bool CheckLift(Mobile from, Item item, ref LRReason reject)
-        {
-            if (!base.CheckLift(from, item, ref reject))
-            {
-                return false;
-            }
-
-            if (item != this && from.AccessLevel < AccessLevel.GameMaster && m_Locked)
-            {
-                return false;
-            }
-
-            return true;
-        }
+        public override bool CheckLift(Mobile from, Item item, ref LRReason reject) =>
+            base.CheckLift(from, item, ref reject) &&
+                (item == this || from.AccessLevel >= AccessLevel.GameMaster || !_locked);
 
         public override bool CheckItemUse(Mobile from, Item item)
         {
@@ -252,7 +136,7 @@ namespace Server.Items
                 return false;
             }
 
-            if (item != this && from.AccessLevel < AccessLevel.GameMaster && m_Locked)
+            if (item != this && from.AccessLevel < AccessLevel.GameMaster && _locked)
             {
                 from.LocalOverheadMessage(MessageType.Regular, 0x3B2, 1019045); // I can't reach that.
                 return false;
@@ -265,7 +149,7 @@ namespace Server.Items
         {
             var inaccessible = false;
 
-            if (m_Locked)
+            if (_locked)
             {
                 int number;
 
@@ -337,7 +221,7 @@ namespace Server.Items
         {
             base.AddNameProperties(list);
 
-            if (IsShipwreckedItem)
+            if (_isShipwreckedItem)
             {
                 list.Add(1041645); // recovered from a shipwreck
             }
@@ -347,7 +231,7 @@ namespace Server.Items
         {
             base.OnSingleClick(from);
 
-            if (IsShipwreckedItem)
+            if (_isShipwreckedItem)
             {
                 LabelTo(from, 1041645); // recovered from a shipwreck
             }
