@@ -11,7 +11,7 @@ namespace Server.Items
 
         public override bool TrapOnOpen => !_trapOnLockpick;
 
-        public override bool DisplaysContent => !_locked;
+        public override bool DisplaysContent => !_rawLocked;
 
         public int OnCraft(
             int quality, bool makersMark, Mobile from, CraftSystem craftSystem, Type typeRes, BaseTool tool,
@@ -69,18 +69,18 @@ namespace Server.Items
         [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
         private int _lockLevel;
 
-        private bool _locked;
+        [SerializableField(6, getter: "private", setter: "private")]
+        private bool _rawLocked;
 
         [CommandProperty(AccessLevel.GameMaster)]
-        [SerializableField(6)]
         public virtual bool Locked
         {
-            get => _locked;
+            get => _rawLocked;
             set
             {
-                _locked = value;
+                _rawLocked = value;
 
-                if (_locked)
+                if (_rawLocked)
                 {
                     Picker = null;
                 }
@@ -101,11 +101,11 @@ namespace Server.Items
             }
         }
 
-        public override bool CheckContentDisplay(Mobile from) => !_locked && base.CheckContentDisplay(from);
+        public override bool CheckContentDisplay(Mobile from) => !_rawLocked && base.CheckContentDisplay(from);
 
         public override bool TryDropItem(Mobile from, Item dropped, bool sendFullMessage)
         {
-            if (from.AccessLevel < AccessLevel.GameMaster && _locked)
+            if (from.AccessLevel < AccessLevel.GameMaster && _rawLocked)
             {
                 from.SendLocalizedMessage(501747); // It appears to be locked.
                 return false;
@@ -116,7 +116,7 @@ namespace Server.Items
 
         public override bool OnDragDropInto(Mobile from, Item item, Point3D p)
         {
-            if (from.AccessLevel < AccessLevel.GameMaster && _locked)
+            if (from.AccessLevel < AccessLevel.GameMaster && _rawLocked)
             {
                 from.SendLocalizedMessage(501747); // It appears to be locked.
                 return false;
@@ -127,7 +127,7 @@ namespace Server.Items
 
         public override bool CheckLift(Mobile from, Item item, ref LRReason reject) =>
             base.CheckLift(from, item, ref reject) &&
-                (item == this || from.AccessLevel >= AccessLevel.GameMaster || !_locked);
+                (item == this || from.AccessLevel >= AccessLevel.GameMaster || !_rawLocked);
 
         public override bool CheckItemUse(Mobile from, Item item)
         {
@@ -136,7 +136,7 @@ namespace Server.Items
                 return false;
             }
 
-            if (item != this && from.AccessLevel < AccessLevel.GameMaster && _locked)
+            if (item != this && from.AccessLevel < AccessLevel.GameMaster && _rawLocked)
             {
                 from.LocalOverheadMessage(MessageType.Regular, 0x3B2, 1019045); // I can't reach that.
                 return false;
@@ -147,24 +147,24 @@ namespace Server.Items
 
         public virtual bool CheckLocked(Mobile from)
         {
-            var inaccessible = false;
-
-            if (_locked)
+            if (!_rawLocked)
             {
-                int number;
-
-                if (from.AccessLevel >= AccessLevel.GameMaster)
-                {
-                    number = 502502; // That is locked, but you open it with your godly powers.
-                }
-                else
-                {
-                    number = 501747; // It appears to be locked.
-                    inaccessible = true;
-                }
-
-                from.NetState.SendMessageLocalized(Serial, ItemID, MessageType.Regular, 0x3B2, 3, number);
+                return false;
             }
+
+            var inaccessible = from.AccessLevel < AccessLevel.GameMaster;
+
+            int number;
+            if (inaccessible)
+            {
+                number = 501747; // It appears to be locked.
+            }
+            else
+            {
+                number = 502502; // That is locked, but you open it with your godly powers.
+            }
+
+            from.NetState.SendMessageLocalized(Serial, ItemID, MessageType.Regular, 0x3B2, 3, number);
 
             return inaccessible;
         }
