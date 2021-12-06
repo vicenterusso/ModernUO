@@ -8,11 +8,30 @@ using Server.Utilities;
 
 namespace Server.Items
 {
-    public class TreasureMapChest : LockableContainer
+    [Serializable(2, false)]
+    public partial class TreasureMapChest : LockableContainer
     {
-        private List<Item> m_Lifted = new();
+        [SerializableField(0, setter: "private")]
+        private List<Mobile> _guardians;
 
-        private Timer m_Timer;
+        [SerializableField(1)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private bool _temporary;
+
+        [SerializableField(2)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private Mobile _owner;
+
+        [SerializableField(3)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private int _level;
+
+        [Tidy]
+        [SerializableField(4, setter: "private")]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private HashSet<Item> _lifted;
+
+        private TimerExecutionToken _timer;
 
         [Constructible]
         public TreasureMapChest(int level) : this(null, level)
@@ -21,21 +40,14 @@ namespace Server.Items
 
         public TreasureMapChest(Mobile owner, int level, bool temporary = false) : base(0xE40)
         {
-            Owner = owner;
-            Level = level;
-            DeleteTime = Core.Now + TimeSpan.FromHours(3.0);
+            _owner = owner;
+            _level = level;
 
-            Temporary = temporary;
-            Guardians = new List<Mobile>();
+            _temporary = temporary;
+            _guardians = new List<Mobile>();
 
-            m_Timer = new DeleteTimer(this, DeleteTime);
-            m_Timer.Start();
-
+            Timer.StartTimer(TimeSpan.FromHours(3.0), Delete, out _timer);
             Fill(this, level);
-        }
-
-        public TreasureMapChest(Serial serial) : base(serial)
-        {
         }
 
         public override int LabelNumber => 3000541;
@@ -52,18 +64,7 @@ namespace Server.Items
         };
 
         [CommandProperty(AccessLevel.GameMaster)]
-        public int Level { get; set; }
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public Mobile Owner { get; set; }
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public DateTime DeleteTime { get; private set; }
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public bool Temporary { get; set; }
-
-        public List<Mobile> Guardians { get; private set; }
+        public DateTime DeleteTime => _timer.Next;
 
         public override bool IsDecoContainer => false;
 
@@ -199,16 +200,9 @@ namespace Server.Items
 
                 for (var i = 0; i < numberItems; ++i)
                 {
-                    Item item;
-
-                    if (Core.AOS)
-                    {
-                        item = Loot.RandomArmorOrShieldOrWeaponOrJewelry();
-                    }
-                    else
-                    {
-                        item = Loot.RandomArmorOrShieldOrWeapon();
-                    }
+                    var item = Core.AOS
+                        ? Loot.RandomArmorOrShieldOrWeaponOrJewelry()
+                        : Loot.RandomArmorOrShieldOrWeapon();
 
                     if (item is BaseWeapon weapon)
                     {
@@ -261,15 +255,7 @@ namespace Server.Items
                 }
             }
 
-            int reagents;
-            if (level == 0)
-            {
-                reagents = 12;
-            }
-            else
-            {
-                reagents = level * 3;
-            }
+            var reagents = level == 0 ? 12 : level * 3;
 
             for (var i = 0; i < reagents; i++)
             {
@@ -278,15 +264,7 @@ namespace Server.Items
                 cont.DropItem(item);
             }
 
-            int gems;
-            if (level == 0)
-            {
-                gems = 2;
-            }
-            else
-            {
-                gems = level * 3;
-            }
+            var gems = level == 0 ? 2 : level * 3;
 
             for (var i = 0; i < gems; i++)
             {
@@ -307,15 +285,14 @@ namespace Server.Items
                 return false;
             }
 
-            if (Level == 0 && from.AccessLevel < AccessLevel.GameMaster)
+            if (_level == 0 && from.AccessLevel < AccessLevel.GameMaster)
             {
-                foreach (var m in Guardians)
+                foreach (var m in _guardians)
                 {
                     if (m.Alive)
                     {
-                        from.SendLocalizedMessage(
-                            1046448
-                        ); // You must first kill the guardians before you may open this chest.
+                        // You must first kill the guardians before you may open this chest.
+                        from.SendLocalizedMessage(1046448);
                         return true;
                     }
                 }
@@ -329,17 +306,17 @@ namespace Server.Items
 
         private bool CheckLoot(Mobile m, bool criminalAction)
         {
-            if (Temporary)
+            if (_temporary)
             {
                 return false;
             }
 
-            if (m.AccessLevel >= AccessLevel.GameMaster || Owner == null || m == Owner)
+            if (m.AccessLevel >= AccessLevel.GameMaster || _owner == null || m == _owner)
             {
                 return true;
             }
 
-            if (Party.Get(Owner)?.Contains(m) == true)
+            if (Party.Get(_owner)?.Contains(m) == true)
             {
                 return true;
             }
@@ -372,17 +349,17 @@ namespace Server.Items
 
         public override void OnItemLifted(Mobile from, Item item)
         {
-            var notYetLifted = !m_Lifted.Contains(item);
+            var notYetLifted = !_lifted.Contains(item);
 
             from.RevealingAction();
 
             if (notYetLifted)
             {
-                m_Lifted.Add(item);
+                _lifted.Add(item);
 
                 if (Utility.RandomDouble() <= 0.1) // 10% chance to spawn a new monster
                 {
-                    TreasureMap.Spawn(Level, GetWorldLocation(), Map, from, false);
+                    TreasureMap.Spawn(_level, GetWorldLocation(), Map, from, false);
                 }
             }
 
@@ -400,64 +377,18 @@ namespace Server.Items
             return base.CheckHold(m, item, message, checkItems, plusItems, plusWeight);
         }
 
-        public override void Serialize(IGenericWriter writer)
+        private void Deserialize(IGenericReader reader, int version)
         {
-            base.Serialize(writer);
+            _guardians = reader.ReadEntityList<Mobile>();
+            _temporary = reader.ReadBool();
+            _owner = reader.ReadEntity<Mobile>();
+            _level = reader.ReadInt();
+            var deleteTime = reader.ReadDeltaTime(); // Delete Time
+            _lifted = reader.ReadEntitySet<Item>();
 
-            writer.Write(2); // version
-
-            Guardians.Tidy();
-            writer.Write(Guardians);
-            writer.Write(Temporary);
-
-            writer.Write(Owner);
-
-            writer.Write(Level);
-            writer.WriteDeltaTime(DeleteTime);
-            m_Lifted.Tidy();
-            writer.Write(m_Lifted);
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            switch (version)
+            if (!_temporary)
             {
-                case 2:
-                    {
-                        Guardians = reader.ReadEntityList<Mobile>();
-                        Temporary = reader.ReadBool();
-
-                        goto case 1;
-                    }
-                case 1:
-                    {
-                        Owner = reader.ReadEntity<Mobile>();
-
-                        goto case 0;
-                    }
-                case 0:
-                    {
-                        Level = reader.ReadInt();
-                        DeleteTime = reader.ReadDeltaTime();
-                        m_Lifted = reader.ReadEntityList<Item>();
-
-                        if (version < 2)
-                        {
-                            Guardians = new List<Mobile>();
-                        }
-
-                        break;
-                    }
-            }
-
-            if (!Temporary)
-            {
-                m_Timer = new DeleteTimer(this, DeleteTime);
-                m_Timer.Start();
+                Timer.StartTimer(deleteTime - Core.Now, Delete, out _timer);
             }
             else
             {
@@ -467,10 +398,7 @@ namespace Server.Items
 
         public override void OnAfterDelete()
         {
-            m_Timer?.Stop();
-
-            m_Timer = null;
-
+            _timer.Cancel();
             base.OnAfterDelete();
         }
 
@@ -497,7 +425,7 @@ namespace Server.Items
 
         public void EndRemove(Mobile from)
         {
-            if (Deleted || from != Owner || !from.InRange(GetWorldLocation(), 3))
+            if (Deleted || from != _owner || !from.InRange(GetWorldLocation(), 3))
             {
                 return;
             }
@@ -551,40 +479,25 @@ namespace Server.Items
 
         private class RemoveEntry : ContextMenuEntry
         {
-            private readonly TreasureMapChest m_Chest;
-            private readonly Mobile m_From;
+            private readonly TreasureMapChest _chest;
+            private readonly Mobile _from;
 
             public RemoveEntry(Mobile from, TreasureMapChest chest) : base(6149, 3)
             {
-                m_From = from;
-                m_Chest = chest;
+                _from = from;
+                _chest = chest;
 
-                Enabled = from == chest.Owner;
+                Enabled = from == chest._owner;
             }
 
             public override void OnClick()
             {
-                if (m_Chest.Deleted || m_From != m_Chest.Owner || !m_From.CheckAlive())
+                if (_chest.Deleted || _from != _chest._owner || !_from.CheckAlive())
                 {
                     return;
                 }
 
-                m_Chest.BeginRemove(m_From);
-            }
-        }
-
-        private class DeleteTimer : Timer
-        {
-            private readonly Item m_Item;
-
-            public DeleteTimer(Item item, DateTime time) : base(time - Core.Now)
-            {
-                m_Item = item;
-            }
-
-            protected override void OnTick()
-            {
-                m_Item.Delete();
+                _chest.BeginRemove(_from);
             }
         }
     }
