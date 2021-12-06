@@ -1,7 +1,8 @@
 namespace Server.Items
 {
     [Flippable]
-    public class ParagonChest : LockableContainer
+    [Serializable(0, false)]
+    public partial class ParagonChest : LockableContainer
     {
         private static readonly int[] m_ItemIDs =
         {
@@ -14,31 +15,29 @@ namespace Server.Items
             0x966, 0x96D, 0x972, 0x973, 0x979
         };
 
-        private string m_Name;
+        [InternString]
+        [SerializableField(0, getter: "private", setter: "private")]
+        private string _name;
 
         [Constructible]
         public ParagonChest(string name, int level) : base(m_ItemIDs.RandomElement())
         {
-            m_Name = name;
+            _name = name;
             Hue = m_Hues.RandomElement();
             Fill(level);
-        }
-
-        public ParagonChest(Serial serial) : base(serial)
-        {
         }
 
         public override void OnSingleClick(Mobile from)
         {
             base.OnSingleClick(from);
-            LabelTo(from, 1063449, m_Name);
+            LabelTo(from, 1063449, _name);
         }
 
         public override void GetProperties(ObjectPropertyList list)
         {
             base.GetProperties(list);
 
-            list.Add(1063449, m_Name);
+            list.Add(1063449, _name);
         }
 
         private static void GetRandomAOSStats(out int attributeCount, out int min, out int max)
@@ -193,24 +192,6 @@ namespace Server.Items
             }
 
             DropItem(new TreasureMap(level + 1, Utility.RandomBool() ? Map.Felucca : Map.Trammel));
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.Write(0); // version
-
-            writer.Write(m_Name);
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadInt();
-
-            m_Name = Utility.Intern(reader.ReadString());
         }
     }
 }

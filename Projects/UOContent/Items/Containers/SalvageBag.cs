@@ -8,13 +8,13 @@ using Server.Utilities;
 
 namespace Server.Items
 {
-    public class SalvageBag : Bag
+    [Serializable(0)]
+    public partial class SalvageBag : Bag
     {
         private bool m_Failure;
 
         [Constructible]
-        public SalvageBag()
-            : this(Utility.RandomBlueHue())
+        public SalvageBag() : this(Utility.RandomBlueHue())
         {
         }
 
@@ -24,11 +24,6 @@ namespace Server.Items
             Weight = 2.0;
             Hue = hue;
             m_Failure = false;
-        }
-
-        public SalvageBag(Serial serial)
-            : base(serial)
-        {
         }
 
         public override int LabelNumber => 1079931; // Salvage Bag
@@ -228,6 +223,11 @@ namespace Server.Items
             }
         }
 
+        private static readonly Type[] _clothTypes = {
+            typeof(Leather), typeof(Cloth), typeof(SpinedLeather), typeof(HornedLeather), typeof(BarbedLeather),
+            typeof(Bandage), typeof(Bone)
+        };
+
         private void SalvageCloth(Mobile from)
         {
             var scissors = from.Backpack.FindItemByType<Scissors>();
@@ -264,18 +264,10 @@ namespace Server.Items
                 }
             }
 
-            from.SendLocalizedMessage(
-                1079974,
-                $"{salvaged}\t{salvaged + notSalvaged}"
-            ); // Salvaged: ~1_COUNT~/~2_NUM~ tailored items
+            // Salvaged: ~1_COUNT~/~2_NUM~ tailored items
+            from.SendLocalizedMessage(1079974, $"{salvaged}\t{salvaged + notSalvaged}");
 
-            var items = FindItemsByType(
-                new[]
-                {
-                    typeof(Leather), typeof(Cloth), typeof(SpinedLeather), typeof(HornedLeather), typeof(BarbedLeather),
-                    typeof(Bandage), typeof(Bone)
-                }
-            );
+            var items = FindItemsByType(_clothTypes);
 
             for (var i = 0; i < items.Length; i++)
             {
@@ -286,30 +278,14 @@ namespace Server.Items
         private void SalvageAll(Mobile from)
         {
             SalvageIngots(from);
-
             SalvageCloth(from);
-        }
-
-        public override void Serialize(IGenericWriter writer)
-        {
-            base.Serialize(writer);
-
-            writer.WriteEncodedInt(0); // version
-        }
-
-        public override void Deserialize(IGenericReader reader)
-        {
-            base.Deserialize(reader);
-
-            var version = reader.ReadEncodedInt();
         }
 
         private class SalvageAllEntry : ContextMenuEntry
         {
             private readonly SalvageBag m_Bag;
 
-            public SalvageAllEntry(SalvageBag bag, bool enabled)
-                : base(6276)
+            public SalvageAllEntry(SalvageBag bag, bool enabled) : base(6276)
             {
                 m_Bag = bag;
 
@@ -339,8 +315,7 @@ namespace Server.Items
         {
             private readonly SalvageBag m_Bag;
 
-            public SalvageIngotsEntry(SalvageBag bag, bool enabled)
-                : base(6277)
+            public SalvageIngotsEntry(SalvageBag bag, bool enabled) : base(6277)
             {
                 m_Bag = bag;
 
@@ -370,8 +345,7 @@ namespace Server.Items
         {
             private readonly SalvageBag m_Bag;
 
-            public SalvageClothEntry(SalvageBag bag, bool enabled)
-                : base(6278)
+            public SalvageClothEntry(SalvageBag bag, bool enabled) : base(6278)
             {
                 m_Bag = bag;
 
