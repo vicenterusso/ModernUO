@@ -26,12 +26,24 @@ namespace Server.Items
         [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
         private int _level;
 
+        [TimerDrift]
+        [SerializableField(4)]
+        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
+        private Timer _expireTimer;
+
+        [DeserializeTimerField(4)]
+        private void DeserializeExpireTimer(TimeSpan delay)
+        {
+            if (!_temporary)
+            {
+                _expireTimer = Timer.DelayCall(delay, Delete);
+            }
+        }
+
         [Tidy]
-        [SerializableField(4, setter: "private")]
+        [SerializableField(5, setter: "private")]
         [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
         private HashSet<Item> _lifted;
-
-        private TimerExecutionToken _timer;
 
         [Constructible]
         public TreasureMapChest(int level) : this(null, level)
@@ -46,7 +58,7 @@ namespace Server.Items
             _temporary = temporary;
             _guardians = new List<Mobile>();
 
-            Timer.StartTimer(TimeSpan.FromHours(3.0), Delete, out _timer);
+            _expireTimer = Timer.DelayCall(TimeSpan.FromHours(3.0), Delete);
             Fill(this, level);
         }
 
@@ -64,7 +76,7 @@ namespace Server.Items
         };
 
         [CommandProperty(AccessLevel.GameMaster)]
-        public DateTime DeleteTime => _timer.Next;
+        public DateTime DeleteTime => _expireTimer.Next;
 
         public override bool IsDecoContainer => false;
 
@@ -379,18 +391,18 @@ namespace Server.Items
 
         private void Deserialize(IGenericReader reader, int version)
         {
-            _guardians = reader.ReadEntityList<Mobile>();
-            _temporary = reader.ReadBool();
+            _guardians = new List<Mobile>();
+
             _owner = reader.ReadEntity<Mobile>();
             _level = reader.ReadInt();
-            var deleteTime = reader.ReadDeltaTime(); // Delete Time
+            DeserializeExpireTimer(reader.ReadDeltaTime() - Core.Now);
             _lifted = reader.ReadEntitySet<Item>();
+        }
 
-            if (!_temporary)
-            {
-                Timer.StartTimer(deleteTime - Core.Now, Delete, out _timer);
-            }
-            else
+        [AfterDeserialization(false)]
+        private void AfterDeserialization()
+        {
+            if (_expireTimer == null)
             {
                 Delete();
             }
@@ -398,7 +410,8 @@ namespace Server.Items
 
         public override void OnAfterDelete()
         {
-            _timer.Cancel();
+            _expireTimer?.Stop();
+            _expireTimer = null;
             base.OnAfterDelete();
         }
 
