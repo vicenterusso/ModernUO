@@ -24,19 +24,16 @@ namespace Server.Spells.Third
 
         public void Target(Item item)
         {
-            if (!(item is LockableContainer cont))
+            if (item is not LockableContainer cont)
             {
                 Caster.SendLocalizedMessage(501762); // Target must be an unlocked chest.
             }
             else if (BaseHouse.CheckLockedDownOrSecured(cont))
             {
-                Caster.LocalOverheadMessage(
-                    MessageType.Regular,
-                    0x22,
-                    501761
-                ); // You cannot cast this on a locked down item.
+                // You cannot cast this on a locked down item.
+                Caster.LocalOverheadMessage(MessageType.Regular, 0x22, 501761);
             }
-            else if (cont.Locked || cont.LockLevel == 0 || cont is ParagonChest)
+            else if (cont.Locked || cont.LockLevel == LockableContainer.CannotPick || cont is ParagonChest)
             {
                 Caster.SendLocalizedMessage(501762); // Target must be an unlocked chest.
             }
@@ -59,7 +56,7 @@ namespace Server.Spells.Third
                 // The chest is now locked!
                 Caster.LocalOverheadMessage(MessageType.Regular, 0x3B2, 501763);
 
-                cont.LockLevel = -255; // signal magic lock
+                cont.LockLevel = LockableContainer.MagicLock;
                 cont.Locked = true;
             }
 

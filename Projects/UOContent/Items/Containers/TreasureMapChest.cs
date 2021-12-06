@@ -143,11 +143,10 @@ namespace Server.Items
         {
             cont.Movable = false;
             cont.Locked = true;
-            int numberItems;
 
             if (level == 0)
             {
-                cont.LockLevel = 0; // Can't be unlocked
+                cont.LockLevel = CannotPick;
 
                 cont.DropItem(new Gold(Utility.RandomMinMax(50, 100)));
 
@@ -187,23 +186,16 @@ namespace Server.Items
                     cont.DropItem(Loot.RandomScroll(0, 63, SpellbookType.Regular));
                 }
 
-                if (Core.SE)
+                var numberItems = Core.SE ? level switch
                 {
-                    numberItems = level switch
-                    {
-                        1 => 5,
-                        2 => 10,
-                        3 => 15,
-                        4 => 38,
-                        5 => 50,
-                        6 => 60,
-                        _ => 0
-                    };
-                }
-                else
-                {
-                    numberItems = level * 6;
-                }
+                    1 => 5,
+                    2 => 10,
+                    3 => 15,
+                    4 => 38,
+                    5 => 50,
+                    6 => 60,
+                    _ => 0
+                } : level * 6;
 
                 for (var i = 0; i < numberItems; ++i)
                 {

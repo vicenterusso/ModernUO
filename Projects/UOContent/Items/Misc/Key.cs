@@ -271,14 +271,6 @@ namespace Server.Items
 
                 o.Locked = !o.Locked;
 
-                if (o is LockableContainer cont1)
-                {
-                    if (cont1.LockLevel == -255)
-                    {
-                        cont1.LockLevel = cont1.RequiredSkill - 10;
-                    }
-                }
-
                 if (o is Item item)
                 {
                     if (o.Locked)
@@ -290,18 +282,24 @@ namespace Server.Items
                         item.SendLocalizedMessageTo(from, 1048001); // You unlock it.
                     }
 
-                    if (item is LockableContainer cont && cont.TrapType != TrapType.None && cont.TrapOnLockpick)
+                    if (item is LockableContainer cont)
                     {
-                        if (o.Locked)
+                        if (cont.LockLevel == LockableContainer.MagicLock)
                         {
-                            cont.SendLocalizedMessageTo(from, 501673); // You re-enable the trap.
+                            cont.LockLevel = cont.RequiredSkill - 10;
                         }
-                        else
+
+                        if (cont.TrapType != TrapType.None && cont.TrapOnLockpick)
                         {
-                            cont.SendLocalizedMessageTo(
-                                from,
-                                501672
-                            ); // You disable the trap temporarily.  Lock it again to re-enable it.
+                            if (o.Locked)
+                            {
+                                cont.SendLocalizedMessageTo(from, 501673); // You re-enable the trap.
+                            }
+                            else
+                            {
+                                // You disable the trap temporarily.  Lock it again to re-enable it.
+                                cont.SendLocalizedMessageTo(from, 501672);
+                            }
                         }
                     }
                 }

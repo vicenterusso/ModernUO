@@ -126,10 +126,8 @@ namespace Server.Items
                         return;
                     }
 
-                    if (m_Item.LockLevel == 0 || m_Item.LockLevel == -255)
+                    if (m_Item.LockLevel is LockableContainer.CannotPick or LockableContainer.MagicLock)
                     {
-                        // LockLevel of 0 means that the door can't be picklocked
-                        // LockLevel of -255 means it's magic locked
                         item.SendLocalizedMessageTo(m_From, 502073); // This lock cannot be picked by normal means
                         return;
                     }

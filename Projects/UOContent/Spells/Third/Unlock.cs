@@ -54,13 +54,10 @@ namespace Server.Spells.Third
                     }
                     else if (!cont.Locked)
                     {
-                        Caster.LocalOverheadMessage(
-                            MessageType.Regular,
-                            0x3B2,
-                            503101
-                        ); // That did not need to be unlocked.
+                        // That did not need to be unlocked.
+                        Caster.LocalOverheadMessage(MessageType.Regular, 0x3B2, 503101);
                     }
-                    else if (cont.LockLevel == 0)
+                    else if (cont.LockLevel == LockableContainer.CannotPick)
                     {
                         Caster.SendLocalizedMessage(501666); // You can't unlock that!
                     }
@@ -68,23 +65,19 @@ namespace Server.Spells.Third
                     {
                         var level = (int)(Caster.Skills.Magery.Value * 0.8) - 4;
 
-                        if (level >= cont.RequiredSkill &&
-                            !(cont is TreasureMapChest chest && chest.Level > 2))
+                        if (level >= cont.RequiredSkill && cont is not TreasureMapChest { Level: > 2 })
                         {
                             cont.Locked = false;
 
-                            if (cont.LockLevel == -255)
+                            if (cont.LockLevel == LockableContainer.MagicLock)
                             {
                                 cont.LockLevel = cont.RequiredSkill - 10;
                             }
                         }
                         else
                         {
-                            Caster.LocalOverheadMessage(
-                                MessageType.Regular,
-                                0x3B2,
-                                503099
-                            ); // My spell does not seem to have an effect on that lock.
+                            // My spell does not seem to have an effect on that lock.
+                            Caster.LocalOverheadMessage(MessageType.Regular, 0x3B2, 503099);
                         }
                     }
                 }

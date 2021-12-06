@@ -7,6 +7,9 @@ namespace Server.Items
     [Serializable(0, false)]
     public abstract partial class LockableContainer : TrappableContainer, ILockable, ILockpickable, ICraftable, IShipwreckedItem
     {
+        public const int CannotPick = 0;
+        public const int MagicLock = -255;
+
         public LockableContainer(int itemID) : base(itemID) => MaxLockLevel = 100;
 
         public override bool TrapOnOpen => !_trapOnLockpick;
@@ -32,7 +35,9 @@ namespace Server.Items
 
                 _requiredSkill = Math.Min(level - 4, 95);
                 _maxLockLevel = Math.Min(level + 35, 95);
-                _lockLevel = Math.Clamp(level - 14, 0, 95);
+
+                // Lock level of 0 means it is not pickable, so change it to -1
+                _lockLevel = level == 14 ? -1 : Math.Min(level - 14, 95);
             }
             else
             {

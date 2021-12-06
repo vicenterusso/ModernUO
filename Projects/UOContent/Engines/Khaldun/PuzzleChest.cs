@@ -267,7 +267,7 @@ namespace Server.Items
 
         protected override void SetLockLevel()
         {
-            LockLevel = 0; // Can't be unlocked
+            LockLevel = CannotPick;
         }
 
         public override bool CheckLocked(Mobile from)
