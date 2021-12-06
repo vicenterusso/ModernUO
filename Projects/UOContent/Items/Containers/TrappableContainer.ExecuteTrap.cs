@@ -9,6 +9,7 @@ public partial class TrappableContainer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void ExecuteExplosionTrap(Mobile from, Point3D loc)
     {
+        var facet = Map;
         if (from.InRange(loc, 3))
         {
             int damage;
