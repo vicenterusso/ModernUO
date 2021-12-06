@@ -395,7 +395,8 @@ namespace Server.Items
 
             _owner = reader.ReadEntity<Mobile>();
             _level = reader.ReadInt();
-            DeserializeExpireTimer(reader.ReadDeltaTime() - Core.Now);
+            var expireTimerNext = reader.ReadDeltaTime();
+            DeserializeExpireTimer(expireTimerNext == DateTime.MinValue ? TimeSpan.MinValue : expireTimerNext - Core.Now);
             _lifted = reader.ReadEntitySet<Item>();
         }
 

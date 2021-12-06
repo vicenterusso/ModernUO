@@ -226,11 +226,8 @@ namespace Server.Items
         private void Deserialize(IGenericReader reader, int version)
         {
             _contentType = (FillableContentType)reader.ReadInt();
-            var respawnTime = reader.ReadDeltaTime();
-            if (respawnTime > DateTime.MinValue)
-            {
-                DeserializeRespawnTimer(Core.Now - respawnTime);
-            }
+            var respawnTimerNext = reader.ReadDeltaTime();
+            DeserializeRespawnTimer(respawnTimerNext == DateTime.MinValue ? TimeSpan.MinValue : respawnTimerNext - Core.Now);
         }
 
         [AfterDeserialization]
