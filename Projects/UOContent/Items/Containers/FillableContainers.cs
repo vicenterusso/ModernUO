@@ -8,8 +8,7 @@ namespace Server.Items
     public abstract partial class FillableContainer : LockableContainer
     {
         [SerializableField(0)]
-        [SerializableFieldAttr("[CommandProperty(AccessLevel.GameMaster)]")]
-        protected FillableContentType _contentType;
+        protected FillableContentType _rawContentType;
 
         [TimerDrift]
         [SerializableField(1)]
@@ -37,6 +36,17 @@ namespace Server.Items
         [CommandProperty(AccessLevel.GameMaster)]
         public DateTime NextRespawnTime => _respawnTimer.Next;
 
+        [CommandProperty(AccessLevel.GameMaster)]
+        public FillableContentType ContentType
+        {
+            get => _rawContentType;
+            set
+            {
+                ClearContents();
+                _rawContentType = value;
+            }
+        }
+
         protected void ClearContents()
         {
             for (var i = Items.Count - 1; i >= 0; --i)
@@ -62,14 +72,14 @@ namespace Server.Items
 
         public virtual void AcquireContent()
         {
-            if (_contentType != FillableContentType.None)
+            if (_rawContentType != FillableContentType.None)
             {
                 return;
             }
 
-            _contentType = FillableContent.Acquire(GetWorldLocation(), Map);
+            _rawContentType = FillableContent.Acquire(GetWorldLocation(), Map);
 
-            if (_contentType != FillableContentType.None)
+            if (_rawContentType != FillableContentType.None)
             {
                 Respawn();
             }
@@ -102,7 +112,7 @@ namespace Server.Items
 
         public void CheckRespawn()
         {
-            var canSpawn = _contentType != FillableContentType.None && !Deleted && GetItemsCount() <= SpawnThreshold && !Movable &&
+            var canSpawn = _rawContentType != FillableContentType.None && !Deleted && GetItemsCount() <= SpawnThreshold && !Movable &&
                            Parent == null && !IsLockedDown && !IsSecure;
 
             if (canSpawn)
@@ -126,14 +136,14 @@ namespace Server.Items
             _respawnTimer?.Stop();
             _respawnTimer = null;
 
-            if (_contentType != FillableContentType.None || Deleted)
+            if (_rawContentType != FillableContentType.None || Deleted)
             {
                 return;
             }
 
             GenerateContent();
 
-            var level = FillableContent.Lookup(_contentType).Level;
+            var level = FillableContent.Lookup(_rawContentType).Level;
 
             if (IsLockable)
             {
@@ -186,12 +196,12 @@ namespace Server.Items
 
         public virtual void GenerateContent()
         {
-            if (_contentType != FillableContentType.None || Deleted)
+            if (_rawContentType != FillableContentType.None || Deleted)
             {
                 return;
             }
 
-            var content = FillableContent.Lookup(_contentType);
+            var content = FillableContent.Lookup(_rawContentType);
 
             var toSpawn = GetSpawnCount();
 
@@ -225,7 +235,7 @@ namespace Server.Items
 
         private void Deserialize(IGenericReader reader, int version)
         {
-            _contentType = (FillableContentType)reader.ReadInt();
+            _rawContentType = (FillableContentType)reader.ReadInt();
             var respawnTimerNext = reader.ReadDeltaTime();
             DeserializeRespawnTimer(respawnTimerNext == DateTime.MinValue ? TimeSpan.MinValue : respawnTimerNext - Core.Now);
         }
@@ -254,12 +264,12 @@ namespace Server.Items
 
         public override void AcquireContent()
         {
-            if (_contentType != FillableContentType.None)
+            if (_rawContentType != FillableContentType.None)
             {
                 return;
             }
 
-            _contentType = FillableContentType.Library;
+            _rawContentType = FillableContentType.Library;
             Respawn();
         }
     }
@@ -488,7 +498,7 @@ namespace Server.Items
 
     public class FillableContent
     {
-        public static FillableContent Alchemist = new(
+        private static readonly FillableContent Alchemist = new(
             1,
             new[]
             {
@@ -508,7 +518,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Armorer = new(
+        private static readonly FillableContent Armorer = new(
             2,
             new[]
             {
@@ -527,7 +537,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent ArtisanGuild = new(
+        private static readonly FillableContent ArtisanGuild = new(
             1,
             Array.Empty<Type>(),
             new[]
@@ -555,7 +565,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Baker = new(
+        private static readonly FillableContent Baker = new(
             1,
             new[]
             {
@@ -570,7 +580,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Bard = new(
+        private static readonly FillableContent Bard = new(
             1,
             new[]
             {
@@ -587,7 +597,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Blacksmith = new(
+        private static readonly FillableContent Blacksmith = new(
             2,
             new[]
             {
@@ -610,7 +620,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Bowyer = new(
+        private static readonly FillableContent Bowyer = new(
             2,
             new[]
             {
@@ -624,7 +634,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Butcher = new(
+        private static readonly FillableContent Butcher = new(
             1,
             new[]
             {
@@ -650,7 +660,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Carpenter = new(
+        private static readonly FillableContent Carpenter = new(
             1,
             new[]
             {
@@ -677,7 +687,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Clothier = new(
+        private static readonly FillableContent Clothier = new(
             1,
             new[]
             {
@@ -703,7 +713,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Cobbler = new(
+        private static readonly FillableContent Cobbler = new(
             1,
             new[]
             {
@@ -718,7 +728,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Docks = new(
+        private static readonly FillableContent Docks = new(
             1,
             new[]
             {
@@ -735,7 +745,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Farm = new(
+        private static readonly FillableContent Farm = new(
             1,
             new[]
             {
@@ -765,7 +775,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent FighterGuild = new(
+        private static readonly FillableContent FighterGuild = new(
             3,
             new[]
             {
@@ -780,7 +790,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Guard = new(
+        private static readonly FillableContent Guard = new(
             3,
             Array.Empty<Type>(),
             new[]
@@ -792,7 +802,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Healer = new(
+        private static readonly FillableContent Healer = new(
             1,
             new[]
             {
@@ -807,7 +817,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Herbalist = new(
+        private static readonly FillableContent Herbalist = new(
             1,
             new[]
             {
@@ -826,7 +836,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Inn = new(
+        private static readonly FillableContent Inn = new(
             1,
             Array.Empty<Type>(),
             new[]
@@ -837,7 +847,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Jeweler = new(
+        private static readonly FillableContent Jeweler = new(
             2,
             new[]
             {
@@ -856,7 +866,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Library = new(
+        private static readonly FillableContent Library = new(
             1,
             new[]
             {
@@ -870,7 +880,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Mage = new(
+        private static readonly FillableContent Mage = new(
             2,
             new[]
             {
@@ -893,7 +903,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Merchant = new(
+        private static readonly FillableContent Merchant = new(
             1,
             new[]
             {
@@ -952,7 +962,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Mill = new(
+        private static readonly FillableContent Mill = new(
             1,
             Array.Empty<Type>(),
             new[]
@@ -961,7 +971,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Mine = new(
+        private static readonly FillableContent Mine = new(
             1,
             new[]
             {
@@ -977,7 +987,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Observatory = new(
+        private static readonly FillableContent Observatory = new(
             1,
             Array.Empty<Type>(),
             new[]
@@ -988,7 +998,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Painter = new(
+        private static readonly FillableContent Painter = new(
             1,
             Array.Empty<Type>(),
             new[]
@@ -998,7 +1008,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Provisioner = new(
+        private static readonly FillableContent Provisioner = new(
             1,
             new[]
             {
@@ -1064,7 +1074,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Ranger = new(
+        private static readonly FillableContent Ranger = new(
             2,
             new[]
             {
@@ -1103,7 +1113,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Stables = new(
+        private static readonly FillableContent Stables = new(
             1,
             new[]
             {
@@ -1117,7 +1127,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Tanner = new(
+        private static readonly FillableContent Tanner = new(
             2,
             new[]
             {
@@ -1137,7 +1147,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Tavern = new(
+        private static readonly FillableContent Tavern = new(
             1,
             new[]
             {
@@ -1155,7 +1165,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent ThiefGuild = new(
+        private static readonly FillableContent ThiefGuild = new(
             1,
             new[]
             {
@@ -1173,7 +1183,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Tinker = new(
+        private static readonly FillableContent Tinker = new(
             1,
             new[]
             {
@@ -1202,7 +1212,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Veterinarian = new(
+        private static readonly FillableContent Veterinarian = new(
             1,
             new[]
             {
@@ -1218,7 +1228,7 @@ namespace Server.Items
             }
         );
 
-        public static FillableContent Weaponsmith = new(
+        private static readonly FillableContent Weaponsmith = new(
             2,
             new[]
             {
@@ -1231,9 +1241,9 @@ namespace Server.Items
             }
         );
 
-        private static Dictionary<Type, FillableContentType> m_AcquireTable;
+        private static Dictionary<Type, FillableContentType> _acquireTable;
 
-        private static readonly FillableContent[] m_ContentTypes =
+        private static readonly FillableContent[] ContentTypes =
         {
             Weaponsmith, Provisioner, Mage,
             Alchemist, Armorer, ArtisanGuild,
@@ -1289,13 +1299,13 @@ namespace Server.Items
             return null;
         }
 
-        public static FillableContent Lookup(FillableContentType type)
+        private static FillableContent Lookup(FillableContentType type)
         {
             var v = (int)type;
 
-            if (v >= 0 && v < m_ContentTypes.Length)
+            if (v >= 0 && v < ContentTypes.Length)
             {
-                return m_ContentTypes[v];
+                return ContentTypes[v];
             }
 
             return null;
@@ -1308,7 +1318,7 @@ namespace Server.Items
                 return FillableContentType.None;
             }
 
-            return (FillableContentType)Array.IndexOf(m_ContentTypes, content);
+            return (FillableContentType)Array.IndexOf(ContentTypes, content);
         }
 
         public static FillableContentType Acquire(Point3D loc, Map map)
@@ -1320,17 +1330,17 @@ namespace Server.Items
                 return content;
             }
 
-            if (m_AcquireTable == null)
+            if (_acquireTable == null)
             {
-                m_AcquireTable = new Dictionary<Type, FillableContentType>();
+                _acquireTable = new Dictionary<Type, FillableContentType>();
 
-                for (var i = 0; i < m_ContentTypes.Length; ++i)
+                for (var i = 0; i < ContentTypes.Length; ++i)
                 {
-                    var fill = m_ContentTypes[i];
+                    var fill = ContentTypes[i];
 
                     for (var j = 0; j < fill.Vendors.Length; ++j)
                     {
-                        m_AcquireTable[fill.Vendors[j]] = fill.TypeID;
+                        _acquireTable[fill.Vendors[j]] = fill.TypeID;
                     }
                 }
             }
@@ -1345,7 +1355,7 @@ namespace Server.Items
                     continue;
                 }
 
-                if (m_AcquireTable.TryGetValue(mob.GetType(), out var check))
+                if (_acquireTable.TryGetValue(mob.GetType(), out var check))
                 {
                     nearest = mob;
                     content = check;
