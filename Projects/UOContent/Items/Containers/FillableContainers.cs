@@ -42,8 +42,14 @@ namespace Server.Items
             get => _rawContentType;
             set
             {
+                if (_rawContentType == value)
+                {
+                    return;
+                }
+
                 ClearContents();
                 _rawContentType = value;
+                Respawn();
             }
         }
 
@@ -77,7 +83,7 @@ namespace Server.Items
                 return;
             }
 
-            _rawContentType = FillableContent.Acquire(GetWorldLocation(), Map);
+            RawContentType = FillableContent.Acquire(GetWorldLocation(), Map);
 
             if (_rawContentType != FillableContentType.None)
             {
@@ -136,7 +142,7 @@ namespace Server.Items
             _respawnTimer?.Stop();
             _respawnTimer = null;
 
-            if (_rawContentType != FillableContentType.None || Deleted)
+            if (_rawContentType == FillableContentType.None || Deleted)
             {
                 return;
             }
@@ -158,15 +164,7 @@ namespace Server.Items
 
             if (IsTrappable && (level > 1 || Utility.Random(5) < 4))
             {
-                if (level > Utility.Random(5))
-                {
-                    TrapType = TrapType.PoisonTrap;
-                }
-                else
-                {
-                    TrapType = TrapType.ExplosionTrap;
-                }
-
+                TrapType = level > Utility.Random(5) ? TrapType.PoisonTrap : TrapType.ExplosionTrap;
                 TrapPower = level * Utility.RandomMinMax(10, 30);
                 TrapLevel = level;
             }
@@ -269,7 +267,7 @@ namespace Server.Items
                 return;
             }
 
-            _rawContentType = FillableContentType.Library;
+            RawContentType = FillableContentType.Library;
             Respawn();
         }
     }
@@ -1243,6 +1241,7 @@ namespace Server.Items
 
         private static Dictionary<Type, FillableContentType> _acquireTable;
 
+        // This should match the FillableContentType enum
         private static readonly FillableContent[] ContentTypes =
         {
             Weaponsmith, Provisioner, Mage,
@@ -1299,7 +1298,7 @@ namespace Server.Items
             return null;
         }
 
-        private static FillableContent Lookup(FillableContentType type)
+        public static FillableContent Lookup(FillableContentType type)
         {
             var v = (int)type;
 
