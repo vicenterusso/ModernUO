@@ -456,8 +456,8 @@ namespace Server.Misc
             }
 
             if (target.Kills >= 5 ||
-                target.Body.IsMonster && IsSummoned(bcTarg) && target is not BaseFamiliar and not ArcaneFey and not Golem
-                || bcTarg?.AlwaysMurderer == true || bcTarg?.IsAnimatedDead == true)
+                target.Body.IsMonster && IsSummoned(bcTarg) && target is not BaseFamiliar && target is not ArcaneFey &&
+                target is not Golem || bcTarg?.AlwaysMurderer == true || bcTarg?.IsAnimatedDead == true)
             {
                 return Notoriety.Murderer;
             }
