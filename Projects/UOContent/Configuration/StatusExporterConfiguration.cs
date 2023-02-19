@@ -48,6 +48,10 @@ namespace Server.Configurations
 
         public static float DataExporterInterval { get; private set; }
 
+        public static string DataExporterKeyName { get; private set; }
+
+        public static bool DataExporterTimeline { get; private set; }
+
         public static void Configure()
         {
             var path = Path.Join(Core.BaseDirectory, m_RelPath);
@@ -83,6 +87,9 @@ namespace Server.Configurations
             OnlineKeyExpiry = settings.onlineKeyExpiry;
             DataExporterDelay = settings.dataExporterDelay;
             DataExporterInterval = settings.dataExporterInterval;
+            DataExporterKeyName = settings.dataExporterKeyName;
+            DataExporterTimeline = settings.dataExporterTimeline;
+
         }
 
         public class Settings
@@ -116,6 +123,13 @@ namespace Server.Configurations
 
             [JsonPropertyName("dataExporterInterval")]
             public float dataExporterInterval { get; set; } = 3600.0f;
+
+            [JsonPropertyName("dataExporterKeyName")]
+            public string dataExporterKeyName { get; set; } = "modernuo-data";
+
+            [JsonPropertyName("dataExporterTimeline")]
+            public bool dataExporterTimeline { get; set; } = false;
+
         }
     }
 }

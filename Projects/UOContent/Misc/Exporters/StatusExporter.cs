@@ -2,7 +2,7 @@
 using Server.Configurations;
 using StackExchange.Redis;
 
-namespace Server.Misc
+namespace Server.Misc.Exporters
 {
     public class StatusExporter : Timer
     {
@@ -41,8 +41,6 @@ namespace Server.Misc
 
         protected override void OnTick()
         {
-            Console.WriteLine("");
-            Console.WriteLine("StatusExporter OnTick " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:sszzz"));
             db.StringSet(
                 key: StatusExporterConfiguration.OnlineKeyName,
                 value: DateTime.Now.ToString("yyyy-MM-dd HH:mm:sszzz"),

@@ -1,8 +1,8 @@
 {
   "enabled": true,
-  "redisHost": "144.22.191.61",
+  "redisHost": "",
   "redisPort": 6379,
-  "redisPassword": "redis@123x",
+  "redisPassword": "",
   "onlineStatusDelay": 10.0,
   "onlineStatusInterval": 3.0,
   "onlineKeyName": "online-status",
