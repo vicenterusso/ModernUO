@@ -33,6 +33,7 @@
         <PackageReference Include="MailKit" Version="3.4.3" />
         <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="7.0.0" />
         <PackageReference Include="Microsoft.Toolkit.HighPerformance" Version="7.1.2" />
+        <PackageReference Include="StackExchange.Redis" Version="2.6.90" />
         <PackageReference Include="Zlib.Bindings" Version="1.10.1" />
         <PackageReference Include="Argon2.Bindings" Version="1.14.4" />
         <PackageReference Include="Zstd.Binaries" Version="1.5.1" />

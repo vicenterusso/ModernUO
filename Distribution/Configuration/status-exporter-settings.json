@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "redisHost": "144.22.191.61",
+  "redisPort": 6379,
+  "redisPassword": "redis@123x",
+  "onlineStatusDelay": 10.0,
+  "onlineStatusInterval": 3.0,
+  "onlineKeyName": "online-status",
+  "onlineKeyExpiry": 30.0,
+  "dataExporterDelay": 10.0,
+  "dataExporterInterval": 10.0
+}
