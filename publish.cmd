@@ -40,8 +40,13 @@ dotnet clean --verbosity quiet
 echo dotnet restore --force-evaluate --source https://api.nuget.org/v3/index.json
 dotnet restore --force-evaluate --source https://api.nuget.org/v3/index.json
 
-echo dotnet publish ${config} ${os}-${arch} --no-restore --self-contained=false -o Distribution/Assemblies Projects/UOContent/UOContent.csproj
-dotnet publish ${config} ${os}-${arch} --no-restore --self-contained=false -o Distribution/Assemblies Projects/UOContent/UOContent.csproj
+# Set the environment variable for the current shell session
+export MSBuildDefineConstants="DEBUG%3BTHREADGUARD"
+
+echo dotnet publish ${config} ${os}-${arch} --no-restore --self-contained=false -o Distribution/Assemblies Projects/UOContent/UOContent.csproj -p:DefineConstants=$MSBuildDefineConstants
+dotnet publish ${config} ${os}-${arch} --no-restore --self-contained=false -o Distribution/Assemblies Projects/UOContent/UOContent.csproj -p:DefineConstants=$MSBuildDefineConstants
+echo Generating serialization migration schema...
+dotnet tool run ModernUOSchemaGenerator -- ModernUO.sln
 
 echo Generating serialization migration schema...
 dotnet tool run ModernUOSchemaGenerator -- ModernUO.sln
