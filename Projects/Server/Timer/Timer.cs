@@ -15,10 +15,10 @@
 
 using System;
 using System.Diagnostics;
+using Server.Diagnostics;
 using Server.Logging;
 
 #if THREADGUARD
-using System.Diagnostics;
 using System.Threading;
 #endif
 
