@@ -17,6 +17,11 @@ using Server.Text;
 using Server.Utilities;
 using CalcMoves = Server.Movement.Movement;
 
+#if THREADGUARD
+using System.Diagnostics;
+using System.Threading;
+#endif
+
 namespace Server;
 
 public delegate void TargetCallback(Mobile from, object targeted);
@@ -7702,14 +7707,14 @@ public partial class Mobile : IHued, IComparable<Mobile>, ISpawnable, IObjectPro
     public virtual void Delta(MobileDelta flag)
     {
 #if THREADGUARD
-            if (Thread.CurrentThread != Core.Thread)
-            {
-                Utility.PushColor(ConsoleColor.Red);
-                Console.WriteLine("Attempting to queue a delta change from an invalid thread!");
-                Console.WriteLine(new StackTrace());
-                Utility.PopColor();
-                return;
-            }
+        if (Thread.CurrentThread != Core.Thread)
+        {
+            Utility.PushColor(ConsoleColor.Red);
+            Console.WriteLine("Attempting to queue a delta change from an invalid thread!");
+            Console.WriteLine(new StackTrace());
+            Utility.PopColor();
+            return;
+        }
 #endif
 
         if (m_Map == null || m_Map == Map.Internal || Deleted)

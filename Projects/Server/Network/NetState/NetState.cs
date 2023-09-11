@@ -30,6 +30,11 @@ using Server.Items;
 using Server.Logging;
 using Server.Menus;
 
+#if THREADGUARD
+using System.Diagnostics;
+using System.Threading;
+#endif
+
 namespace Server.Network;
 
 public delegate void NetStateCreatedCallback(NetState ns);
@@ -457,7 +462,8 @@ public partial class NetState : IComparable<NetState>
                 Console.WriteLine("Attempting to get pipe buffer from wrong thread!");
                 Console.WriteLine(new StackTrace());
                 Utility.PopColor();
-                return;
+                cBuffer = default;
+                return false;
             }
 #endif
         var result = SendPipe.Writer.TryGetMemory();
