@@ -45,19 +45,19 @@ namespace Server.Spells.Seventh
                         toDrain /= 2;
                     }
                 }
+                else if (CheckResisted(m))
+                {
+                    m.SendLocalizedMessage(501783); // You feel yourself resisting magical energy.
+                }
                 else
                 {
-                    if (CheckResisted(m))
-                    {
-                        m.SendLocalizedMessage(501783); // You feel yourself resisting magical energy.
-                    }
-                    else
-                    {
-                        toDrain = m.Mana;
-                    }
+                    toDrain = m.Mana;
                 }
 
-                m.Mana -= Math.Clamp(toDrain, 0, Math.Min(m.Mana, Caster.ManaMax - Caster.Mana));
+                // Will not drain more than the target has currently
+                toDrain = Math.Min(m.Mana, toDrain);
+                m.Mana -= toDrain;
+
                 Caster.Mana += toDrain;
 
                 if (Core.AOS)

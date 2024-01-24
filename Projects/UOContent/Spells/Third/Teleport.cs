@@ -1,3 +1,4 @@
+using Server.Collections;
 using Server.Factions;
 using Server.Items;
 using Server.Misc;
@@ -39,7 +40,7 @@ namespace Server.Spells.Third
             {
                 Caster.SendLocalizedMessage(1061632); // You can't do that while carrying the sigil.
             }
-            else if (WeightOverloading.IsOverloaded(Caster))
+            else if (StaminaSystem.IsOverloaded(Caster))
             {
                 Caster.SendLocalizedMessage(502359, "", 0x22); // Thou art too encumbered to move.
             }
@@ -96,18 +97,21 @@ namespace Server.Spells.Third
 
                 m.PlaySound(0x1FE);
 
-                var eable = m.GetItemsInRange(0);
-
-                foreach (var item in eable)
+                using var queue = PooledRefQueue<Item>.Create();
+                foreach (var item in m.GetItemsAt())
                 {
                     if (item is ParalyzeFieldSpell.InternalItem or
                         PoisonFieldSpell.InternalItem or FireFieldSpell.FireFieldItem)
                     {
-                        item.OnMoveOver(m);
+                        // Use a queue just in case OnMoveOver changes the item's sector
+                        queue.Enqueue(item);
                     }
                 }
 
-                eable.Free();
+                while (queue.Count > 0)
+                {
+                    queue.Dequeue().OnMoveOver(m);
+                }
             }
 
             FinishSequence();
@@ -121,7 +125,7 @@ namespace Server.Spells.Third
                 return false;
             }
 
-            if (WeightOverloading.IsOverloaded(Caster))
+            if (StaminaSystem.IsOverloaded(Caster))
             {
                 Caster.SendLocalizedMessage(502359, "", 0x22); // Thou art too encumbered to move.
                 return false;

@@ -36,6 +36,9 @@ public static class Core
 {
     private static readonly ILogger logger = LogFactory.GetLogger(typeof(Core));
 
+    private static bool _performProcessKill;
+    private static bool _restartOnKill;
+    private static bool _performSnapshot;
     private static bool _crashed;
     private static string _baseDirectory;
 
@@ -143,6 +146,7 @@ public static class Core
             }
 
             var timestamp = Stopwatch.GetTimestamp();
+
             return timestamp > _maxTickCountBeforePrecisionLoss
                 ? timestamp / _ticksPerMillisecond
                 // No precision loss
@@ -166,10 +170,12 @@ public static class Core
 
     public static long Uptime => Thread.CurrentThread != Thread ? 0 : TickCount - _firstTick;
 
-    private static long _cycleIndex = 1;
-    private static float[] _cyclesPerSecond = new float[128];
+    private static long _cycleIndex;
+    private static readonly double[] _cyclesPerSecond = new double[128];
 
-    public static float CyclesPerSecond => _cyclesPerSecond[(_cycleIndex - 1) % _cyclesPerSecond.Length];
+    public static double CyclesPerSecond => _cyclesPerSecond[_cycleIndex];
+
+    public static double AverageCPS => _cyclesPerSecond.Average();
 
     public static bool MultiProcessor { get; private set; }
 
@@ -300,6 +306,12 @@ public static class Core
         }
     }
 
+    public static void Kill(bool restart = false)
+    {
+        _performProcessKill = true;
+        _restartOnKill = restart;
+    }
+
     private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         Console.WriteLine(e.IsTerminating ? "Error:" : "Warning:");
@@ -355,7 +367,7 @@ public static class Core
         Kill();
     }
 
-    public static void Kill(bool restart = false)
+    internal static void DoKill(bool restart = false)
     {
         if (Closing)
         {
@@ -397,6 +409,8 @@ public static class Core
 
         World.WaitForWriteCompletion();
 
+        World.ExitSerializationThreads();
+
         if (!_crashed)
         {
             EventSink.InvokeShutdown();
@@ -405,6 +419,8 @@ public static class Core
 
     public static void Main(string[] args)
     {
+        Console.OutputEncoding = Encoding.UTF8;
+
         AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
         AppDomain.CurrentDomain.ProcessExit += CurrentDomain_ProcessExit;
         AppDomain.CurrentDomain.AssemblyResolve += AssemblyHandler.AssemblyResolver;
@@ -515,6 +531,7 @@ public static class Core
         AssemblyHandler.Invoke("Initialize");
 
         TcpServer.Start();
+        PingServer.Start();
         EventSink.InvokeServerStarted();
         _firstTick = TickCount;
         RunEventLoop();
@@ -530,9 +547,10 @@ public static class Core
             var idleCPU = ServerConfiguration.GetOrUpdateSetting("core.enableIdleCPU", false);
 #endif
 
-            long last = TickCount;
+            var cycleCount = _cyclesPerSecond.Length;
+            long last = Stopwatch.GetTimestamp();
             const int interval = 100;
-            const float ticksPerSecond = 1000 * interval;
+            double frequency = Stopwatch.Frequency * interval;
 
             int sample = 0;
 
@@ -546,26 +564,43 @@ public static class Core
                 Timer.Slice(_tickCount);
 
                 // Handle networking
-                TcpServer.Slice();
                 NetState.Slice();
+                PingServer.Slice();
 
                 // Execute captured post-await methods (like Timer.Pause)
                 LoopContext.ExecuteTasks();
 
                 Timer.CheckTimerPool(); // Check for pool depletion so we can async refill it.
 
+                if (_performSnapshot)
+                {
+                    // Return value is the offset that can be used to fix timers that should drift
+                    World.Snapshot();
+                    _performSnapshot = false;
+                }
+
+                if (_performProcessKill)
+                {
+                    DoKill(_restartOnKill);
+                }
+
                 _tickCount = 0;
                 _now = DateTime.MinValue;
 
-                if (idleCPU && ++sample % interval == 0)
+                if (++sample % interval == 0)
                 {
-                    var now = TickCount;
+                    var now = Stopwatch.GetTimestamp();
 
-                    var cyclesPerSecond = ticksPerSecond / (now - last);
-                    _cyclesPerSecond[_cycleIndex++ % _cyclesPerSecond.Length] = cyclesPerSecond;
+                    var cyclesPerSecond = frequency / (now - last);
+                    _cyclesPerSecond[_cycleIndex++] = cyclesPerSecond;
+                    if (_cycleIndex == cycleCount)
+                    {
+                        _cycleIndex = 0;
+                    }
+
                     last = now;
 
-                    if (cyclesPerSecond > 80)
+                    if (idleCPU && cyclesPerSecond > 125)
                     {
                         Thread.Sleep(2);
                     }
@@ -576,7 +611,13 @@ public static class Core
         {
             CurrentDomain_UnhandledException(null, new UnhandledExceptionEventArgs(e, true));
         }
+        finally
+        {
+            World.ExitSerializationThreads();
+        }
     }
+
+    internal static void RequestSnapshot() => _performSnapshot = true;
 
     public static void VerifySerialization()
     {

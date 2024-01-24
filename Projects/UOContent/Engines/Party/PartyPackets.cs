@@ -54,7 +54,7 @@ namespace Server.Engines.PartySystem
                 return;
             }
 
-            Span<byte> buffer = stackalloc byte[GetPartyMemberListPacketLength(p.Count)];
+            Span<byte> buffer = stackalloc byte[GetPartyMemberListPacketLength(p.Count)].InitializePacket();
             CreatePartyMemberList(buffer, p);
 
             ns.Send(buffer);
@@ -70,7 +70,7 @@ namespace Server.Engines.PartySystem
                 return;
             }
 
-            Span<byte> buffer = stackalloc byte[GetPartyRemoveMemberPacketLength(p?.Count ?? 0)];
+            Span<byte> buffer = stackalloc byte[GetPartyRemoveMemberPacketLength(p?.Count ?? 0)].InitializePacket();
             CreatePartyRemoveMember(buffer, m, p);
 
             ns.Send(buffer);
@@ -110,7 +110,7 @@ namespace Server.Engines.PartySystem
                 return;
             }
 
-            Span<byte> buffer = stackalloc byte[GetPartyTextMessagePacketLength(text)];
+            Span<byte> buffer = stackalloc byte[GetPartyTextMessagePacketLength(text)].InitializePacket();
             CreatePartyTextMessage(buffer, m, text, toAll);
 
             ns.Send(buffer);
@@ -140,15 +140,14 @@ namespace Server.Engines.PartySystem
                 return;
             }
 
-            Span<byte> buffer = stackalloc byte[10];
-            var writer = new SpanWriter(buffer);
+            var writer = new SpanWriter(stackalloc byte[10]);
             writer.Write((byte)0xBF); // Packet ID
             writer.Write((ushort)10);
             writer.Write((ushort)0x06); // Sub-packet
             writer.Write((byte)0x07); // command
             writer.Write(leader);
 
-            ns.Send(buffer);
+            ns.Send(writer.Span);
         }
     }
 }

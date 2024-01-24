@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Server.Collections;
 using Server.Regions;
 using Server.Spells;
 
@@ -80,7 +81,7 @@ namespace Server.Multis
             var start = new Point3D(center.X + mcl.Min.X, center.Y + mcl.Min.Y, center.Z);
 
             // These are storage lists. They hold items and mobiles found in the map for further processing
-            var items = new List<Item>();
+            using var items = PooledRefList<Item>.Create();
             var mobiles = new List<Mobile>();
 
             // These are also storage lists. They hold location values indicating the yard and border locations.
@@ -136,16 +137,10 @@ namespace Server.Multis
                     var landTile = map.Tiles.GetLandTile(tileX, tileY);
                     var landID = landTile.ID & TileData.MaxLandValue;
 
-                    var oldTiles = map.Tiles.GetStaticTiles(tileX, tileY, true);
-
-                    var sector = map.GetSector(tileX, tileY);
-
                     items.Clear();
 
-                    for (var i = 0; i < sector.Items.Count; ++i)
+                    foreach (var item in map.GetItemsAt(tileX, tileY))
                     {
-                        var item = sector.Items[i];
-
                         if (item.Visible && item.X == tileX && item.Y == tileY)
                         {
                             items.Add(item);
@@ -154,10 +149,8 @@ namespace Server.Multis
 
                     mobiles.Clear();
 
-                    for (var i = 0; i < sector.Mobiles.Count; ++i)
+                    foreach (var m in map.GetMobilesAt(tileX, tileY))
                     {
-                        var m = sector.Mobiles[i];
-
                         if (m.X == tileX && m.Y == tileY)
                         {
                             mobiles.Add(m);
@@ -207,13 +200,12 @@ namespace Server.Multis
                             hasSurface = true;
                         }
 
-                        for (var j = 0; j < oldTiles.Length; ++j)
+                        foreach (var tile in map.Tiles.GetStaticAndMultiTiles(tileX, tileY))
                         {
-                            var oldTile = oldTiles[j];
-                            var id = TileData.ItemTable[oldTile.ID & TileData.MaxItemValue];
+                            var id = TileData.ItemTable[tile.ID & TileData.MaxItemValue];
 
                             if ((id.Impassable || id.Surface && !id.Background) &&
-                                addTileTop > oldTile.Z && oldTile.Z + id.CalcHeight > addTileZ)
+                                addTileTop > tile.Z && tile.Z + id.CalcHeight > addTileZ)
                             {
                                 return HousePlacementResult.BadStatic; // Broke rule #2
                             }
@@ -222,9 +214,8 @@ namespace Server.Multis
                                 hasSurface = true;*/
                         }
 
-                        for (var j = 0; j < items.Count; ++j)
+                        foreach (var item in items)
                         {
-                            var item = items[j];
                             var id = item.ItemData;
 
                             if (addTileTop > item.Z && item.Z + id.CalcHeight > addTileZ)
@@ -238,11 +229,6 @@ namespace Server.Multis
                                     return HousePlacementResult.BadItem; // Broke rule #2
                                 }
                             }
-
-                            /*else if (isFoundation && !hasSurface && (id.Flags & TileFlag.Surface) != 0 && (item.Z + id.CalcHeight) == center.Z)
-                              {
-                                hasSurface = true;
-                              }*/
                         }
 
                         if (isFoundation && !hasSurface)
@@ -352,11 +338,8 @@ namespace Server.Multis
                     }
                 }
 
-                var tiles = map.Tiles.GetStaticTiles(borderPoint.X, borderPoint.Y, true);
-
-                for (var j = 0; j < tiles.Length; ++j)
+                foreach (var tile in map.Tiles.GetStaticAndMultiTiles(borderPoint.X, borderPoint.Y))
                 {
-                    var tile = tiles[j];
                     var id = TileData.ItemTable[tile.ID & TileData.MaxItemValue];
 
                     if (id.Impassable || id.Surface && !id.Background && tile.Z + id.CalcHeight > center.Z + 2)
@@ -365,14 +348,9 @@ namespace Server.Multis
                     }
                 }
 
-                var sector = map.GetSector(borderPoint.X, borderPoint.Y);
-                var sectorItems = sector.Items;
-
-                for (var j = 0; j < sectorItems.Count; ++j)
+                foreach (var item in map.GetItemsAt(borderPoint))
                 {
-                    var item = sectorItems[j];
-
-                    if (item.X != borderPoint.X || item.Y != borderPoint.Y || item.Movable)
+                    if (item.Movable)
                     {
                         continue;
                     }
@@ -386,58 +364,35 @@ namespace Server.Multis
                 }
             }
 
-            var _sectors = new List<Sector>();
-            var _houses = new List<BaseHouse>();
-
             for (var i = 0; i < yard.Count; i++)
             {
-                var sector = map.GetSector(yard[i]);
+                var yardPoint = yard[i];
 
-                if (!_sectors.Contains(sector))
+                foreach (var house in map.GetMultisInSector<BaseHouse>(yardPoint))
                 {
-                    _sectors.Add(sector);
-
-                    for (var j = 0; j < sector.Multis?.Count; j++)
-                    {
-                        if (sector.Multis[j] is BaseHouse)
-                        {
-                            var _house = (BaseHouse)sector.Multis[j];
-                            if (!_houses.Contains(_house))
-                            {
-                                _houses.Add(_house);
-                            }
-                        }
-                    }
-                }
-            }
-
-            for (var i = 0; i < yard.Count; ++i)
-            {
-                foreach (var b in _houses)
-                {
-                    if (b.Contains(yard[i]))
+                    if (house.Contains(yard[i]))
                     {
                         return HousePlacementResult.BadStatic; // Broke rule #3
                     }
                 }
             }
-            /*Point2D yardPoint = yard[i];
 
-              IPooledEnumerable eable = map.GetMultiTilesAt( yardPoint.X, yardPoint.Y );
-
-              foreach ( StaticTile[] tile in eable )
-              {
-                for ( int j = 0; j < tile.Length; ++j )
-                {
-                  if ((TileData.ItemTable[tile[j].ID & TileData.MaxItemValue].Flags & (TileFlag.Impassable | TileFlag.Surface)) != 0)
-                  {
-                    eable.Free();
-                    return HousePlacementResult.BadStatic; // Broke rule #3
-                  }
-                }
-              }
-
-              eable.Free();*/
+            // TODO: Should we check for MultiTilesAt each yard point?
+            // for (var i = 0; i < yard.Count; i++)
+            // {
+            //     var yardPoint = yard[i];
+            //
+            //     foreach (var tiles in map.GetMultiTilesAt(yardPoint))
+            //     {
+            //         for (int j = 0; j < tiles.Length; ++j)
+            //         {
+            //             if ((TileData.ItemTable[tiles[j].ID & TileData.MaxItemValue].Flags & (TileFlag.Impassable | TileFlag.Surface)) != 0)
+            //             {
+            //                 return HousePlacementResult.BadStatic; // Broke rule #3
+            //             }
+            //         }
+            //     }
+            // }
 
             return HousePlacementResult.Valid;
         }

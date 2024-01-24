@@ -30,6 +30,12 @@ public interface IEntity : IPoint3D, ISerializable
     bool InRange(Point3D p, int range);
 
     void RemoveItem(Item item);
+
+    bool OnMoveOff(Mobile m);
+
+    bool OnMoveOver(Mobile m);
+
+    public void OnMovement(Mobile m, Point3D oldLocation);
 }
 
 public class Entity : IEntity
@@ -43,13 +49,11 @@ public class Entity : IEntity
 
     public Entity(Serial serial) => Serial = serial;
 
-    DateTime ISerializable.Created { get; set; } = Core.Now;
+    public DateTime Created { get; set; } = Core.Now;
 
-    DateTime ISerializable.LastSerialized { get; set; } = DateTime.MaxValue;
+    public long SavePosition { get; set; } = -1;
 
-    long ISerializable.SavePosition { get; set; } = -1;
-
-    BufferWriter ISerializable.SaveBuffer { get; set; }
+    public BufferWriter SaveBuffer { get; set; }
 
     public int TypeRef => -1;
 
@@ -82,6 +86,14 @@ public class Entity : IEntity
     }
 
     public void RemoveItem(Item item)
+    {
+    }
+
+    public bool OnMoveOff(Mobile m) => true;
+
+    public bool OnMoveOver(Mobile m) => true;
+
+    public void OnMovement(Mobile m, Point3D oldLocation)
     {
     }
 

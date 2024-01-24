@@ -13,6 +13,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  *************************************************************************/
 
+using System.Buffers;
 using System.Collections.Generic;
 
 namespace Server.Network;
@@ -25,7 +26,7 @@ public static class IncomingVendorPackets
         IncomingPackets.Register(0x9F, 0, true, &VendorSellReply);
     }
 
-    public static void VendorBuyReply(NetState state, CircularBufferReader reader, int packetLength)
+    public static void VendorBuyReply(NetState state, SpanReader reader)
     {
         var vendor = World.FindMobile((Serial)reader.ReadUInt32());
 
@@ -38,7 +39,7 @@ public static class IncomingVendorPackets
 
         if (!vendor.Deleted && Utility.InRange(vendor.Location, state.Mobile.Location, 10) && flag == 0x02)
         {
-            var msgSize = packetLength - 8; // Remaining bytes
+            var msgSize = reader.Remaining;
 
             if (msgSize / 7 > 100)
             {
@@ -65,7 +66,7 @@ public static class IncomingVendorPackets
         state.SendEndVendorBuy(vendor.Serial);
     }
 
-    public static void VendorSellReply(NetState state, CircularBufferReader reader, int packetLength)
+    public static void VendorSellReply(NetState state, SpanReader reader)
     {
         var serial = (Serial)reader.ReadUInt32();
         var vendor = World.FindMobile(serial);

@@ -31,9 +31,8 @@ namespace Server.Network
 
         public static string FormatTS(TimeSpan ts)
         {
-            var totalSeconds = (int)ts.TotalSeconds;
-            var seconds = totalSeconds % 60;
-            var minutes = totalSeconds / 60;
+            var totalSeconds = (int)Math.Round(ts.TotalSeconds);
+            var minutes = Math.DivRem(totalSeconds, 60, out var seconds);
 
             if (minutes != 0 && seconds != 0)
             {
@@ -48,7 +47,7 @@ namespace Server.Network
             return $"{seconds} second{(seconds == 1 ? "" : "s")}";
         }
 
-        public static void BBClientRequest(NetState state, CircularBufferReader reader, int packetLength)
+        public static void BBClientRequest(NetState state, SpanReader reader)
         {
             var from = state.Mobile;
 
@@ -76,7 +75,7 @@ namespace Server.Network
             }
         }
 
-        public static void BBRequestContent(Mobile from, BaseBulletinBoard board, CircularBufferReader reader)
+        public static void BBRequestContent(Mobile from, BaseBulletinBoard board, SpanReader reader)
         {
             if (World.FindItem((Serial)reader.ReadUInt32()) is not BulletinMessage msg || msg.Parent != board)
             {
@@ -86,7 +85,7 @@ namespace Server.Network
             from.NetState.SendBBMessage(board, msg, true);
         }
 
-        public static void BBRequestHeader(Mobile from, BaseBulletinBoard board, CircularBufferReader reader)
+        public static void BBRequestHeader(Mobile from, BaseBulletinBoard board, SpanReader reader)
         {
             if (World.FindItem((Serial)reader.ReadUInt32()) is not BulletinMessage msg || msg.Parent != board)
             {
@@ -96,7 +95,7 @@ namespace Server.Network
             from.NetState.SendBBMessage(board, msg);
         }
 
-        public static void BBPostMessage(Mobile from, BaseBulletinBoard board, CircularBufferReader reader)
+        public static void BBPostMessage(Mobile from, BaseBulletinBoard board, SpanReader reader)
         {
             var thread = World.FindItem((Serial)reader.ReadUInt32()) as BulletinMessage;
 
@@ -151,7 +150,7 @@ namespace Server.Network
             board.PostMessage(from, thread, subject, lines);
         }
 
-        public static void BBRemoveMessage(Mobile from, BaseBulletinBoard board, CircularBufferReader reader)
+        public static void BBRemoveMessage(Mobile from, BaseBulletinBoard board, SpanReader reader)
         {
             if (World.FindItem((Serial)reader.ReadUInt32()) is not BulletinMessage msg || msg.Parent != board)
             {
@@ -233,7 +232,7 @@ namespace Server.Network
 
             Span<byte> textBuffer = stackalloc byte[TextEncoding.UTF8.GetMaxByteCount(longestTextLine)];
 
-            var writer = maxLength > 81920 ? new SpanWriter(maxLength) : new SpanWriter(stackalloc byte[maxLength]);
+            var writer = maxLength > 1024 ? new SpanWriter(maxLength) : new SpanWriter(stackalloc byte[maxLength]);
             writer.Write((byte)0x71); // Packet ID
             writer.Seek(2, SeekOrigin.Current);
             writer.Write((byte)(content ? 0x02 : 0x01)); // Command

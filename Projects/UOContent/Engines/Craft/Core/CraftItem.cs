@@ -149,9 +149,15 @@ namespace Server.Engines.Craft
 
         public int Mana { get; set; }
 
+        public TextDefinition NeedManaLabel { get; set; }
+
         public int Hits { get; set; }
 
+        public TextDefinition NeedHitsLabel { get; set; }
+
         public int Stam { get; set; }
+
+        public TextDefinition NeedStamLabel { get; set; }
 
         public bool UseSubRes2 { get; set; }
 
@@ -280,19 +286,19 @@ namespace Server.Engines.Craft
         {
             if (Hits > 0 && from.Hits < Hits)
             {
-                message = "You lack the required hit points to make that.";
+                message = NeedHitsLabel;
                 return false;
             }
 
             if (Mana > 0 && from.Mana < Mana)
             {
-                message = "You lack the required mana to make that.";
+                message = NeedManaLabel;
                 return false;
             }
 
             if (Stam > 0 && from.Stam < Stam)
             {
-                message = "You lack the required stamina to make that.";
+                message = NeedStamLabel;
                 return false;
             }
 
@@ -381,12 +387,10 @@ namespace Server.Engines.Craft
                 return false;
             }
 
-            var eable = map.GetItemsInRange(from.Location, 2);
-            foreach (var item in eable)
+            foreach (var item in map.GetItemsInRange(from.Location, 2))
             {
                 if (item.Z + 16 > item.Z && item.Z + 16 > item.Z && Find(item.ItemID, itemIDs))
                 {
-                    eable.Free();
                     return true;
                 }
             }
@@ -398,12 +402,10 @@ namespace Server.Engines.Craft
                     var vx = from.X + x;
                     var vy = from.Y + y;
 
-                    var tiles = map.Tiles.GetStaticTiles(vx, vy, true);
-
-                    for (var i = 0; i < tiles.Length; ++i)
+                    foreach (var tile in map.Tiles.GetStaticAndMultiTiles(vx, vy))
                     {
-                        var z = tiles[i].Z;
-                        var id = tiles[i].ID;
+                        var z = tile.Z;
+                        var id = tile.ID;
 
                         if (z + 16 > from.Z && from.Z + 16 > z && Find(id, itemIDs))
                         {
@@ -453,23 +455,32 @@ namespace Server.Engines.Craft
                 throw new ArgumentOutOfRangeException(nameof(types));
             }
 
-            // TODO: Optimize allocation
             var items = new List<Item>[types.Length];
             var totals = new int[types.Length];
 
+            // First pass, make sure we have enough
             for (var i = 0; i < types.Length; ++i)
             {
-                items[i] = cont.FindItemsByType(types[i]);
+                var itemList = items[i] = new List<Item>();
+                var typeList = types[i];
 
-                for (var j = 0; j < items[i].Count; ++j)
+                // Since we are making our own list, we don't need to use EnumerateItems
+                foreach (var item in cont.FindItems())
                 {
-                    if (items[i][j] is not IHasQuantity hq)
+                    if (!item.InTypeList(typeList))
                     {
-                        totals[i] += items[i][j].Amount;
+                        continue;
+                    }
+
+                    if (item is not IHasQuantity hq)
+                    {
+                        totals[i] += item.Amount;
+                        itemList.Add(item);
                     }
                     else if (hq is not BaseBeverage beverage || beverage.Content == RequiredBeverage)
                     {
                         totals[i] += hq.Quantity;
+                        itemList.Add(item);
                     }
                 }
 
@@ -479,6 +490,7 @@ namespace Server.Engines.Craft
                 }
             }
 
+            // Second pass, consume
             for (var i = 0; i < types.Length; ++i)
             {
                 var need = amounts[i];
@@ -493,7 +505,7 @@ namespace Server.Engines.Craft
 
                         if (theirAmount < need)
                         {
-                            item.Delete();
+                            item.Consume(theirAmount);
                             need -= theirAmount;
                         }
                         else
@@ -504,11 +516,6 @@ namespace Server.Engines.Craft
                     }
                     else
                     {
-                        if (hq is BaseBeverage beverage && beverage.Content != RequiredBeverage)
-                        {
-                            continue;
-                        }
-
                         var theirAmount = hq.Quantity;
 
                         if (theirAmount < need)
@@ -530,23 +537,20 @@ namespace Server.Engines.Craft
 
         public int GetQuantity(Container cont, Type[] types)
         {
-            var items = cont.FindItemsByType(types);
-
             var amount = 0;
-
-            for (var i = 0; i < items.Count; ++i)
+            foreach (var item in cont.FindItems())
             {
-                if (items[i] is not IHasQuantity hq)
+                if (!item.InTypeList(types))
                 {
-                    amount += items[i].Amount;
+                    continue;
                 }
-                else
-                {
-                    if ((hq as BaseBeverage)?.Content != RequiredBeverage)
-                    {
-                        continue;
-                    }
 
+                if (item is not IHasQuantity hq)
+                {
+                    amount += item.Amount;
+                }
+                else if ((hq as BaseBeverage)?.Content == RequiredBeverage)
+                {
                     amount += hq.Quantity;
                 }
             }
@@ -685,7 +689,14 @@ namespace Server.Engines.Craft
             if (NameNumber == 1041267)
             {
                 // Runebooks are a special case, they need a blank recall rune
-                consumeExtra = ourPack.FindItemsByType<RecallRune>().Find(rune => !rune.Marked);
+                foreach (var rune in ourPack.FindItemsByType<RecallRune>())
+                {
+                    if (!rune.Marked)
+                    {
+                        consumeExtra = rune;
+                        break;
+                    }
+                }
 
                 if (consumeExtra == null)
                 {

@@ -15,7 +15,7 @@
 
 namespace Server.Mobiles;
 
-public interface IMount
+public interface IMount : IHasSteps
 {
     Mobile Rider { get; set; }
     void OnRiderDamaged(int amount, Mobile from, bool willKill);

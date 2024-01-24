@@ -140,8 +140,7 @@ namespace Server.Engines.ConPVP
                 return;
             }
 
-            var eable = GetClientsInRange(0);
-            foreach (var ns in eable)
+            foreach (var ns in GetClientsAt())
             {
                 var m = ns.Mobile;
 
@@ -463,34 +462,10 @@ namespace Server.Engines.ConPVP
                         return;
                     }
 
-                    var statics = Map.Tiles.GetStaticTiles(point.X, point.Y, true);
-
-                    if (landTile.ID == 0x244 && statics.Length == 0) // 0x244 = invalid land tile
+                    var foundStatics = false;
+                    foreach (var t in Map.Tiles.GetStaticAndMultiTiles(point.X, point.Y))
                     {
-                        var eable = Map.GetItemsInRange(point, 0);
-
-                        var empty = true;
-                        foreach (var item in eable)
-                        {
-                            if (item != this)
-                            {
-                                empty = false;
-                                break;
-                            }
-                        }
-
-                        eable.Free();
-
-                        if (empty)
-                        {
-                            HitObject(point, landTop, 0);
-                            return;
-                        }
-                    }
-
-                    for (var j = 0; j < statics.Length; j++)
-                    {
-                        var t = statics[j];
+                        foundStatics = true;
 
                         var id = TileData.ItemTable[t.ID & TileData.MaxItemValue];
                         height = id.CalcHeight;
@@ -511,12 +486,30 @@ namespace Server.Engines.ConPVP
                             return;
                         }
                     }
+
+                    if (landTile.ID == 0x244 && foundStatics) // 0x244 = invalid land tile
+                    {
+                        var empty = true;
+                        foreach (var item in Map.GetItemsAt(point))
+                        {
+                            if (item != this)
+                            {
+                                empty = false;
+                                break;
+                            }
+                        }
+
+                        if (empty)
+                        {
+                            HitObject(point, landTop, 0);
+                            return;
+                        }
+                    }
                 }
 
                 var rect = new Rectangle2D(pTop.X, pTop.Y, pBottom.X - pTop.X + 1, pBottom.Y - pTop.Y + 1);
 
-                var area = Map.GetItemsInBounds(rect);
-                foreach (var i in area)
+                foreach (var i in Map.GetItemsInBounds(rect))
                 {
                     if (i == this || i.ItemID >= 0x4000)
                     {
@@ -570,7 +563,6 @@ namespace Server.Engines.ConPVP
                         continue;
                     }
 
-                    area.Free();
                     if (i is BRGoal goal)
                     {
                         var oldLoc = new Point3D(GetWorldLocation());
@@ -591,10 +583,7 @@ namespace Server.Engines.ConPVP
                     return;
                 }
 
-                area.Free();
-
-                var clients = Map.GetClientsInBounds(rect);
-                foreach (var ns in clients)
+                foreach (var ns in Map.GetClientsInBounds(rect))
                 {
                     var m = ns.Mobile;
 
@@ -622,15 +611,11 @@ namespace Server.Engines.ConPVP
                         continue;
                     }
 
-                    clients.Free();
-
                     // TODO: probably need to change this a lot...
                     DoCatch(m);
 
                     return;
                 }
-
-                clients.Free();
 
                 m_PathIdx = pathCheckEnd;
 
@@ -654,14 +639,10 @@ namespace Server.Engines.ConPVP
 
                 var myZ = Map?.GetAverageZ(X, Y) ?? 0;
 
-                var statics = Map?.Tiles?.GetStaticTiles(X, Y, true);
-
-                if (statics != null)
+                if (Map?.Tiles != null)
                 {
-                    for (var j = 0; j < statics.Length; j++)
+                    foreach (var t in Map.Tiles.GetStaticAndMultiTiles(X, Y))
                     {
-                        var t = statics[j];
-
                         var id = TileData.ItemTable[t.ID & TileData.MaxItemValue];
                         height = id.CalcHeight;
 
@@ -672,8 +653,7 @@ namespace Server.Engines.ConPVP
                     }
                 }
 
-                var eable = GetItemsInRange(0);
-                foreach (var item in eable)
+                foreach (var item in GetItemsAt())
                 {
                     if (item.Visible && item != this)
                     {
@@ -684,8 +664,6 @@ namespace Server.Engines.ConPVP
                         }
                     }
                 }
-
-                eable.Free();
 
                 Z = myZ;
                 m_Flying = false;
@@ -944,7 +922,7 @@ namespace Server.Engines.ConPVP
                 ac.Delete();
             }
 
-            this.Clear(Components);
+            ClearComponents();
 
             // stairs
             AddComponent(new AddonComponent(0x74D), -1, +1, -5);
@@ -1737,23 +1715,20 @@ namespace Server.Engines.ConPVP
 
             var hadBomb = false;
 
-            corpse.FindItemsByType<BRBomb>(false)
-                .ForEach(
-                    bomb =>
-                    {
-                        hadBomb = true;
-                        bomb.DropTo(mob, killer);
-                    }
-                );
+            foreach (var bomb in corpse.EnumerateItemsByType<BRBomb>(false))
+            {
+                hadBomb = true;
+                bomb.DropTo(mob, killer);
+            }
 
-            mob.Backpack?.FindItemsByType<BRBomb>(false)
-                .ForEach(
-                    bomb =>
-                    {
-                        hadBomb = true;
-                        bomb.DropTo(mob, killer);
-                    }
-                );
+            if (mob.Backpack != null)
+            {
+                foreach (var bomb in mob.Backpack.EnumerateItemsByType<BRBomb>(false))
+                {
+                    hadBomb = true;
+                    bomb.DropTo(mob, killer);
+                }
+            }
 
             if (killer?.Player == true)
             {

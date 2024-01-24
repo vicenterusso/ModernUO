@@ -158,12 +158,8 @@ namespace Server.Spells
                 return false;
             }
 
-            var sector = map.GetSector(p.X, p.Y);
-
-            for (var i = 0; i < sector.Multis.Count; ++i)
+            foreach (var multi in map.GetMultisInSector(p))
             {
-                var multi = sector.Multis[i];
-
                 if (multi is BaseHouse bh)
                 {
                     if (houses && bh.IsInside(p, 16) || housingrange > 0 && bh.InRange(p, housingrange))
@@ -295,11 +291,14 @@ namespace Server.Spells
                 caster,
                 target,
                 type,
-                GetOffset(caster, target, type, false, skillCheck),
-                duration
+                GetOffset(caster, target, type, false),
+                duration,
+                skillCheck
             );
 
-        public static bool AddStatBonus(Mobile caster, Mobile target, StatType type, int bonus, TimeSpan duration)
+        public static bool AddStatBonus(
+            Mobile caster, Mobile target, StatType type, int bonus, TimeSpan duration, bool skillCheck = false
+        )
         {
             var name = $"[Magic] {type} Buff";
 
@@ -315,8 +314,22 @@ namespace Server.Spells
                 target.RemoveStatMod(mod);
             }
 
+            if (skillCheck)
+            {
+                caster.CheckSkill(SkillName.EvalInt, 0.0, 120.0);
+            }
+
             target.AddStatMod(new StatMod(type, name, bonus, duration));
             return true;
+        }
+
+        public static int GetCurse(Mobile caster, Mobile target, StatType type)
+        {
+            var name = $"[Magic] {type} Curse";
+
+            var mod = target.GetStatMod(name);
+
+            return mod?.Offset ?? 0;
         }
 
         public static bool AddStatCurse(Mobile caster, Mobile target, StatType type, TimeSpan duration, bool skillCheck = true) =>
@@ -324,11 +337,14 @@ namespace Server.Spells
                 caster,
                 target,
                 type,
-                GetOffset(caster, target, type, true, skillCheck),
-                duration
+                GetOffset(caster, target, type, true),
+                duration,
+                skillCheck
             );
 
-        public static bool AddStatCurse(Mobile caster, Mobile target, StatType type, int curse, TimeSpan duration)
+        public static bool AddStatCurse(
+            Mobile caster, Mobile target, StatType type, int curse, TimeSpan duration, bool skillCheck = false
+        )
         {
             var malus = -curse;
             var name = $"[Magic] {type} Curse";
@@ -345,6 +361,12 @@ namespace Server.Spells
                 target.RemoveStatMod(mod);
             }
 
+            if (skillCheck)
+            {
+                caster.CheckSkill(SkillName.EvalInt, 0.0, 120.0);
+                target.CheckSkill(SkillName.MagicResist, 0.0, 120.0);
+            }
+
             target.AddStatMod(new StatMod(type, name, malus, duration));
             return true;
         }
@@ -355,37 +377,20 @@ namespace Server.Spells
 
         public static double GetOffsetScalar(Mobile caster, Mobile target, bool curse)
         {
-            double percent;
-
-            if (curse)
-            {
-                percent = 8 + caster.Skills.EvalInt.Fixed / 100 - target.Skills.MagicResist.Fixed / 100;
-            }
-            else
-            {
-                percent = 1 + caster.Skills.EvalInt.Fixed / 100;
-            }
+            var percent = curse
+                ? 8 + (caster.Skills.EvalInt.Value - target.Skills.MagicResist.Value) / 10
+                : 1 + caster.Skills.EvalInt.Value / 10;
 
             percent *= 0.01;
 
             return Math.Max(percent, 0);
         }
 
-        public static int GetOffset(Mobile caster, Mobile target, StatType type, bool curse, bool skillCheck)
+        public static int GetOffset(Mobile caster, Mobile target, StatType type, bool curse)
         {
             if (!Core.AOS)
             {
                 return 1 + (int)(caster.Skills.Magery.Value * 0.1);
-            }
-
-            if (skillCheck)
-            {
-                caster.CheckSkill(SkillName.EvalInt, 0.0, 120.0);
-
-                if (curse)
-                {
-                    target.CheckSkill(SkillName.MagicResist, 0.0, 120.0);
-                }
             }
 
             var percent = GetOffsetScalar(caster, target, curse);
@@ -394,8 +399,7 @@ namespace Server.Spells
             {
                 StatType.Str => (int)(target.RawStr * percent),
                 StatType.Dex => (int)(target.RawDex * percent),
-                StatType.Int => (int)(target.RawInt * percent),
-                _            => 1 + (int)(caster.Skills.Magery.Value * 0.1)
+                StatType.Int => (int)(target.RawInt * percent)
             };
         }
 
@@ -513,7 +517,7 @@ namespace Server.Spells
 
             if (scaleDuration)
             {
-                duration = TimeSpan.FromSeconds(duration.TotalSeconds * scale);
+                duration *= scale;
             }
 
             if (scaleStats)
@@ -1009,11 +1013,17 @@ namespace Server.Spells
 
                 bcTarget?.AlterSpellDamageFrom(from, ref dmg);
 
-                WeightOverloading.DFA = dfa;
+                if (Feint.GetDamageReduction(from, target, out int feintReduction))
+                {
+                    // example: 35 damage * 50 / 100 = 17 damage
+                    dmg -= dmg * feintReduction / 100;
+                }
+
+                StaminaSystem.DFA = dfa;
 
                 var damageGiven = AOS.Damage(target, from, dmg, phys, fire, cold, pois, nrgy, chaos);
 
-                WeightOverloading.DFA = DFAlgorithm.Standard;
+                StaminaSystem.DFA = DFAlgorithm.Standard;
 
                 bcFrom?.OnDamageSpell(target, damageGiven);
 
@@ -1130,32 +1140,20 @@ namespace Server.Spells
 
             protected override void OnTick()
             {
-                var bcFrom = m_From as BaseCreature;
-                var bcTarg = m_Target as BaseCreature;
-
-                if (m_Target != null)
-                {
-                    bcFrom?.AlterSpellDamageTo(m_Target, ref m_Damage);
-                }
-
-                if (m_From != null)
-                {
-                    bcTarg?.AlterSpellDamageFrom(m_From, ref m_Damage);
-                }
-
-                WeightOverloading.DFA = m_DFA;
-
-                var damageGiven = AOS.Damage(m_Target, m_From, m_Damage, m_Phys, m_Fire, m_Cold, m_Pois, m_Nrgy, m_Chaos);
-
-                WeightOverloading.DFA = DFAlgorithm.Standard;
-
-                bcFrom?.OnDamageSpell(m_Target, damageGiven);
-
-                if (m_From != null)
-                {
-                    bcTarg?.OnHarmfulSpell(m_From);
-                    bcTarg?.OnDamagedBySpell(m_From, damageGiven);
-                }
+                Damage(
+                    m_Spell,
+                    TimeSpan.Zero,
+                    m_Target,
+                    m_From,
+                    m_Damage,
+                    m_Phys,
+                    m_Fire,
+                    m_Cold,
+                    m_Pois,
+                    m_Nrgy,
+                    m_Chaos,
+                    m_DFA
+                );
 
                 m_Spell?.RemoveDelayedDamageContext(m_Target);
             }

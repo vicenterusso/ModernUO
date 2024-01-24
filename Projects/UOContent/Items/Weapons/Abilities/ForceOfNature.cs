@@ -7,7 +7,7 @@ namespace Server.Items
     {
         public override int BaseMana => 35;
 
-        public override void OnHit(Mobile attacker, Mobile defender, int damage)
+        public override void OnHit(Mobile attacker, Mobile defender, int damage, WorldLocation worldLocation)
         {
             if (!Validate(attacker) || !CheckMana(attacker, true))
             {
@@ -103,7 +103,7 @@ namespace Server.Items
                 {
                     int damage = Utility.RandomMinMax(15, 35);
 
-                    AOS.Damage(From, From, damage, false, 0, 0, 0, 0, 0, 0, 100);
+                    AOS.Damage(Target, From, damage, false, 0, 0, 0, 0, 0, 0, 100);
                 }
             }
         }

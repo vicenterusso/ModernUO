@@ -23,15 +23,6 @@ namespace Server.Network;
 public static class PacketUtilities
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void WritePacketLength(this ref CircularBufferWriter writer)
-    {
-        var length = writer.Position;
-        writer.Seek(1, SeekOrigin.Begin);
-        writer.Write((ushort)length);
-        writer.Seek(length, SeekOrigin.Begin);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WritePacketLength(this ref SpanWriter writer)
     {
         writer.Seek(1, SeekOrigin.Begin);
@@ -44,24 +35,7 @@ public static class PacketUtilities
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Span<byte> InitializePacket(this Span<byte> buffer)
     {
-#if NO_LOCAL_INIT
-            if (buffer != null)
-            {
-                buffer[0] = 0;
-            }
-#endif
-        return buffer;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Span<byte> InitializePackets(this Span<byte> buffer, int width)
-    {
-#if NO_LOCAL_INIT
-            for (var i = 0; i < buffer.Length; i += width)
-            {
-                buffer[i] = 0;
-            }
-#endif
+        buffer[0] = 0;
         return buffer;
     }
 }

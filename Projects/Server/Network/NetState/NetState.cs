@@ -15,6 +15,7 @@
 
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -23,6 +24,7 @@ using System.Network;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Server.Accounting;
+using Server.Collections;
 using Server.Diagnostics;
 using Server.Gumps;
 using Server.HuePickers;
@@ -34,10 +36,10 @@ namespace Server.Network;
 
 public delegate void NetStateCreatedCallback(NetState ns);
 
-public delegate void DecodePacket(CircularBuffer<byte> buffer, ref int length);
-public delegate void EncodePacket(ReadOnlySpan<byte> inputBuffer, CircularBuffer<byte> outputBuffer, out int length);
+public delegate void DecodePacket(Span<byte> buffer, ref int length);
+public delegate int EncodePacket(ReadOnlySpan<byte> inputBuffer, Span<byte> outputBuffer);
 
-public partial class NetState : IComparable<NetState>
+public partial class NetState : IComparable<NetState>, IValueLinkListNode<NetState>
 {
     private static readonly ILogger logger = LogFactory.GetLogger(typeof(NetState));
 
@@ -52,9 +54,14 @@ public partial class NetState : IComparable<NetState>
     private static readonly IPollGroup _pollGroup = PollGroup.Create();
     private static readonly Queue<NetState> _flushPending = new(2048);
     private static readonly Queue<NetState> _flushedPartials = new(256);
-    private static readonly Queue<NetState> _disposed = new(256);
+    private static readonly ConcurrentQueue<NetState> _disposed = new();
+    private static readonly Queue<NetState> _throttled = new(256);
+    private static readonly Queue<NetState> _throttledPending = new(256);
 
     public static NetStateCreatedCallback CreatedCallback { get; set; }
+
+    private static readonly HashSet<NetState> _instances = new(2048);
+    public static IReadOnlySet<NetState> Instances => _instances;
 
     private readonly string _toString;
     private ClientVersion _version;
@@ -73,6 +80,10 @@ public partial class NetState : IComparable<NetState>
     private bool _packetLogging;
 
     public GCHandle Handle => _handle;
+
+    // Speed Hack Prevention
+    internal long _movementCredit;
+    internal long _nextMovementTime;
 
     internal enum ParserState
     {
@@ -117,8 +128,8 @@ public partial class NetState : IComparable<NetState>
         HuePickers = new List<HuePicker>();
         Menus = new List<IMenu>();
         Trades = new List<SecureTrade>();
-        RecvPipe = new Pipe<byte>(GC.AllocateUninitializedArray<byte>(RecvPipeSize));
-        SendPipe = new Pipe<byte>(GC.AllocateUninitializedArray<byte>(SendPipeSize));
+        RecvPipe = new Pipe(RecvPipeSize);
+        SendPipe = new Pipe(SendPipeSize);
         _nextActivityCheck = Core.TickCount + 30000;
         ConnectedOn = Core.Now;
 
@@ -145,9 +156,12 @@ public partial class NetState : IComparable<NetState>
             TraceException(ex);
             Disconnect("Unable to add socket to poll group");
         }
-
-        CreatedCallback?.Invoke(this);
     }
+
+    // Sectors
+    public NetState Next { get; set; }
+    public NetState Previous { get; set; }
+    public bool OnLinkList { get; set; }
 
     // Only use this for debugging. This will make your server very slow!
     public bool PacketLogging
@@ -196,9 +210,9 @@ public partial class NetState : IComparable<NetState>
 
     public bool Seeded { get; set; }
 
-    public Pipe<byte> RecvPipe { get; }
+    public Pipe RecvPipe { get; }
 
-    public Pipe<byte> SendPipe { get; }
+    public Pipe SendPipe { get; }
 
     public bool Running => _running;
 
@@ -448,7 +462,7 @@ public partial class NetState : IComparable<NetState>
 
     public override string ToString() => _toString;
 
-    public bool GetSendBuffer(out CircularBuffer<byte> cBuffer)
+    public bool GetSendBuffer(out Span<byte> buffer)
     {
 #if THREADGUARD
             if (Thread.CurrentThread != Core.Thread)
@@ -457,13 +471,13 @@ public partial class NetState : IComparable<NetState>
                 Console.WriteLine("Attempting to get pipe buffer from wrong thread!");
                 Console.WriteLine(new StackTrace());
                 Utility.PopColor();
-                return;
+
+                buffer = Array.Empty<byte>();
+                return false;
             }
 #endif
-        var result = SendPipe.Writer.TryGetMemory();
-        cBuffer = new CircularBuffer<byte>(result.Buffer);
-
-        return !(result.IsClosed || result.Length <= 0);
+        buffer = SendPipe.Writer.AvailableToWrite();
+        return !(SendPipe.Writer.IsClosed || buffer.Length <= 0);
     }
 
     public void Send(ReadOnlySpan<byte> span)
@@ -491,16 +505,16 @@ public partial class NetState : IComparable<NetState>
 
             if (_packetEncoder != null)
             {
-                _packetEncoder(span, buffer, out length);
+                length = _packetEncoder(span, buffer);
             }
             else
             {
-                buffer.CopyFrom(span);
+                span.CopyTo(buffer);
             }
 
             if (PacketLogging)
             {
-                LogPacket(span, ReadOnlySpan<byte>.Empty, span.Length, false);
+                LogPacket(span, false);
             }
 
             SendPipe.Writer.Advance((uint)length);
@@ -539,7 +553,7 @@ public partial class NetState : IComparable<NetState>
         }
     }
 
-    private void LogPacket(ReadOnlySpan<byte> first, ReadOnlySpan<byte> second, int totalLength, bool incoming)
+    private void LogPacket(ReadOnlySpan<byte> buffer, bool incoming)
     {
         try
         {
@@ -551,8 +565,8 @@ public partial class NetState : IComparable<NetState>
             const string outgoingStr = "Server -> Client";
 
             using var sw = new StreamWriter(logPath, true);
-            sw.WriteLine($"{Core.Now:HH:mm:ss.ffff}: {(incoming ? incomingStr : outgoingStr)} 0x{first[0]:X2} (Length: {totalLength})");
-            sw.FormatBuffer(first, second, totalLength);
+            sw.WriteLine($"{Core.Now:HH:mm:ss.ffff}: {(incoming ? incomingStr : outgoingStr)} 0x{buffer[0]:X2} (Length: {buffer.Length})");
+            sw.FormatBuffer(buffer);
             sw.WriteLine();
             sw.WriteLine();
         }
@@ -562,14 +576,17 @@ public partial class NetState : IComparable<NetState>
         }
     }
 
-    public void HandleReceive()
+    public void HandleReceive(bool throttled = false)
     {
         if (!_running)
         {
             return;
         }
 
-        ReceiveData();
+        if (!throttled)
+        {
+            ReceiveData();
+        }
 
         var reader = RecvPipe.Reader;
 
@@ -578,15 +595,15 @@ public partial class NetState : IComparable<NetState>
             // Process as many packets as we can synchronously
             while (_running && _parserState != ParserState.Error && _protocolState != ProtocolState.Error)
             {
-                var result = reader.TryRead();
-                var length = result.Length;
+                var buffer = reader.AvailableToRead();
+                var length = buffer.Length;
 
                 if (length <= 0)
                 {
                     break;
                 }
 
-                var packetReader = new CircularBufferReader(result.Buffer);
+                var packetReader = new SpanReader(buffer);
                 var packetId = packetReader.ReadByte();
                 int packetLength = length;
 
@@ -708,9 +725,22 @@ public partial class NetState : IComparable<NetState>
                     }
                 }
 
-                if (_parserState is ParserState.AwaitingNextPacket or ParserState.Throttled)
+                if (_parserState is ParserState.AwaitingNextPacket)
                 {
                     reader.Advance((uint)packetLength);
+                }
+                else if (_parserState is ParserState.Throttled)
+                {
+                    if (!throttled)
+                    {
+                        _throttled.Enqueue(this);
+                    }
+                    else
+                    {
+                        _throttledPending.Enqueue(this);
+                    }
+
+                    break;
                 }
                 else if (_parserState is ParserState.AwaitingPartialPacket)
                 {
@@ -722,8 +752,6 @@ public partial class NetState : IComparable<NetState>
                     break;
                 }
             }
-
-            reader.Commit();
         }
         catch (Exception ex)
         {
@@ -749,7 +777,7 @@ public partial class NetState : IComparable<NetState>
      * length is the total buffer length. We might be able to use packetReader.Capacity() instead.
      * packetLength is the length of the packet that this function actually found.
      */
-    private unsafe ParserState HandlePacket(CircularBufferReader packetReader, byte packetId, out int packetLength)
+    private unsafe ParserState HandlePacket(SpanReader packetReader, byte packetId, out int packetLength)
     {
         PacketHandler handler = IncomingPackets.GetHandler(packetId);
         int length = packetReader.Length;
@@ -802,7 +830,7 @@ public partial class NetState : IComparable<NetState>
         {
             if (!throttler(packetId, this, out bool drop))
             {
-                return drop ? ParserState.Throttled : ParserState.AwaitingNextPacket;
+                return drop ? ParserState.AwaitingNextPacket : ParserState.Throttled;
             }
 
             SetPacketTime(packetId);
@@ -820,10 +848,15 @@ public partial class NetState : IComparable<NetState>
 
         if (PacketLogging)
         {
-            LogPacket(packetReader.First, packetReader.Second, packetLength, true);
+            LogPacket(packetReader.Buffer[..packetLength], true);
         }
 
-        handler.OnReceive(this, packetReader, packetLength);
+        // Make a new SpanReader that is limited to the length of the packet.
+        // This allows us to use reader.Remaining for VendorBuyReply packet
+        var start = packetReader.Position;
+        var remainingLength = packetLength - packetReader.Position;
+
+        handler.OnReceive(this, new SpanReader(packetReader.Buffer.Slice(start, remainingLength)));
 
         prof?.Finish(packetLength);
 
@@ -839,12 +872,10 @@ public partial class NetState : IComparable<NetState>
             return true;
         }
 
-        SendPipe.Writer.Flush();
-
         var reader = SendPipe.Reader;
-        var result = reader.TryRead();
+        var buffer = reader.AvailableToRead();
 
-        if (result.IsClosed || result.Length == 0)
+        if (reader.IsClosed || buffer.Length == 0)
         {
             return true;
         }
@@ -853,7 +884,7 @@ public partial class NetState : IComparable<NetState>
 
         try
         {
-            bytesWritten = Connection.Send(result.Buffer, SocketFlags.None);
+            bytesWritten = Connection.Send(buffer, SocketFlags.None);
         }
         catch (SocketException ex)
         {
@@ -875,21 +906,20 @@ public partial class NetState : IComparable<NetState>
             reader.Advance((uint)bytesWritten);
         }
 
-        return bytesWritten == result.Length;
+        return bytesWritten == buffer.Length;
     }
 
-    private void DecodePacket(ArraySegment<byte>[] buffer, ref int length)
+    private void DecodePacket(Span<byte> buffer, ref int length)
     {
-        CircularBuffer<byte> cBuffer = new CircularBuffer<byte>(buffer);
-        _packetDecoder?.Invoke(cBuffer, ref length);
+        _packetDecoder?.Invoke(buffer, ref length);
     }
 
     private void ReceiveData()
     {
         var writer = RecvPipe.Writer;
-        var result = writer.TryGetMemory();
+        var buffer = writer.AvailableToWrite();
 
-        if (result.IsClosed || result.Length == 0)
+        if (writer.IsClosed || buffer.Length == 0)
         {
             return;
         }
@@ -898,7 +928,7 @@ public partial class NetState : IComparable<NetState>
 
         try
         {
-            bytesWritten = Connection.Receive(result.Buffer, SocketFlags.None);
+            bytesWritten = Connection.Receive(buffer, SocketFlags.None);
         }
         catch (SocketException ex)
         {
@@ -921,7 +951,7 @@ public partial class NetState : IComparable<NetState>
             return;
         }
 
-        DecodePacket(result.Buffer, ref bytesWritten);
+        DecodePacket(buffer, ref bytesWritten);
 
         writer.Advance((uint)bytesWritten);
         _nextActivityCheck = Core.TickCount + 90000;
@@ -937,7 +967,32 @@ public partial class NetState : IComparable<NetState>
 
     public static void Slice()
     {
-        int count = _pollGroup.Poll(_polledStates);
+        const int maxEntriesPerLoop = 32;
+        var count = 0;
+        while (++count <= maxEntriesPerLoop && TcpServer.ConnectedQueue.TryDequeue(out var ns))
+        {
+            CreatedCallback?.Invoke(ns);
+
+            _instances.Add(ns);
+            ns.LogInfo($"Connected. [{Instances.Count} Online]");
+        }
+
+        while (_throttled.Count > 0)
+        {
+            var ns = _throttled.Dequeue();
+            if (ns.Running)
+            {
+                ns.HandleReceive(true);
+            }
+        }
+
+        // This is enqueued by HandleReceive if already throttled and still throttled
+        while (_throttledPending.Count > 0)
+        {
+            _throttled.Enqueue(_throttledPending.Dequeue());
+        }
+
+        count = _pollGroup.Poll(_polledStates);
 
         if (count > 0)
         {
@@ -994,7 +1049,7 @@ public partial class NetState : IComparable<NetState>
         {
             long curTicks = Core.TickCount;
 
-            foreach (var ns in TcpServer.Instances)
+            foreach (var ns in Instances)
             {
                 ns.CheckAlive(curTicks);
             }
@@ -1002,6 +1057,28 @@ public partial class NetState : IComparable<NetState>
         catch (Exception ex)
         {
             TraceException(ex);
+        }
+    }
+
+    public void Trace(ReadOnlySpan<byte> buffer)
+    {
+        // We don't have data, so nothing to trace
+        if (buffer.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            using var sw = new StreamWriter("unhandled-packets.log", true);
+            sw.WriteLine("Client: {0}: Unhandled packet 0x{1:X2}", this, buffer[0]);
+            sw.FormatBuffer(buffer);
+            sw.WriteLine();
+            sw.WriteLine();
+        }
+        catch
+        {
+            // ignored
         }
     }
 
@@ -1051,7 +1128,7 @@ public partial class NetState : IComparable<NetState>
 
     public static void TraceDisconnect(string reason, string ip)
     {
-        if (reason == string.Empty)
+        if (string.IsNullOrWhiteSpace(reason))
         {
             return;
         }
@@ -1075,6 +1152,12 @@ public partial class NetState : IComparable<NetState>
 
     private void Dispose()
     {
+        // It's possible we could queue for dispose multiple times
+        if (Connection == null)
+        {
+            return;
+        }
+
         TraceDisconnect(_disconnectReason, _toString);
 
         if (_running)
@@ -1099,7 +1182,8 @@ public partial class NetState : IComparable<NetState>
             m.NetState = null;
         }
 
-        TcpServer.Instances.Remove(this);
+        _instances.Remove(this);
+
         try
         {
             _pollGroup.Remove(Connection, _handle);
@@ -1111,6 +1195,8 @@ public partial class NetState : IComparable<NetState>
 
         Connection.Close();
         _handle.Free();
+        RecvPipe.Dispose();
+        SendPipe.Dispose();
 
         Mobile = null;
 
@@ -1124,7 +1210,7 @@ public partial class NetState : IComparable<NetState>
         CityInfo = null;
         Connection = null;
 
-        var count = TcpServer.Instances.Count;
+        var count = Instances.Count;
 
         LogInfo(a != null ? $"Disconnected. [{count} Online] [{a}]" : $"Disconnected. [{count} Online]");
     }

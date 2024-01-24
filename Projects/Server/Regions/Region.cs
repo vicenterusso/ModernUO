@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
+using Server.Collections;
 using Server.Json;
 using Server.Logging;
 using Server.Network;
@@ -117,7 +119,7 @@ public enum MusicName
     NoMusic = 0x1FFF
 }
 
-public class Region : IComparable<Region>
+public class Region : IComparable<Region>, IValueLinkListNode<Region>
 {
     private static readonly ILogger logger = LogFactory.GetLogger(typeof(Region));
 
@@ -175,6 +177,16 @@ public class Region : IComparable<Region>
         }
     }
 
+    // Sectors
+    [JsonIgnore]
+    public Region Next { get; set; }
+
+    [JsonIgnore]
+    public Region Previous { get; set; }
+
+    [JsonIgnore]
+    public bool OnLinkList { get; set; }
+
     // Used during deserialization only
     public Expansion MinExpansion { get; set; } = Expansion.None;
 
@@ -199,13 +211,13 @@ public class Region : IComparable<Region>
 
     public Rectangle3D[] Area { get; }
 
-    public Sector[] Sectors { get; private set; }
+    public Map.Sector[] Sectors { get; private set; }
 
     public bool Dynamic { get; }
 
     public int Priority { get; }
 
-    public int ChildLevel { get; }
+    public int ChildLevel { get; internal set; }
 
     public bool Registered { get; private set; }
 
@@ -284,15 +296,15 @@ public class Region : IComparable<Region>
         }
 
         var sector = map.GetSector(p);
-        var list = sector.RegionRects;
+        var list = sector.Regions;
 
         for (var i = 0; i < list.Count; ++i)
         {
-            var regRect = list[i];
+            var region = list[i];
 
-            if (regRect.Contains(p))
+            if (region.Contains(p))
             {
-                return regRect.Region;
+                return region;
             }
         }
 
@@ -335,7 +347,7 @@ public class Region : IComparable<Region>
 
         Map.RegisterRegion(this);
 
-        var sectors = new List<Sector>();
+        var sectors = new List<Map.Sector>();
 
         for (var i = 0; i < Area.Length; i++)
         {
@@ -499,7 +511,7 @@ public class Region : IComparable<Region>
         return null;
     }
 
-    public Region GetRegion(string regionName)
+    public Region GetRegion(string regionName, bool caseSensitive = true)
     {
         if (regionName == null)
         {
@@ -507,10 +519,11 @@ public class Region : IComparable<Region>
         }
 
         var r = this;
+        var comparisonType = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
         do
         {
-            if (r.Name == regionName)
+            if (string.Equals(r.Name, regionName, comparisonType))
             {
                 return r;
             }
@@ -521,11 +534,14 @@ public class Region : IComparable<Region>
         return null;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsPartOf<T>() where T : Region => GetRegion<T>() != null;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsPartOf(Region region) => this == region || IsChildOf(region);
 
-    public bool IsPartOf(string regionName) => GetRegion(regionName) != null;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsPartOf(string regionName, bool caseSensitive = false) => GetRegion(regionName, caseSensitive) != null;
 
     public virtual bool AcceptsSpawnsFrom(Region region) =>
         AllowSpawn() && (region == this || Parent?.AcceptsSpawnsFrom(region) == true);

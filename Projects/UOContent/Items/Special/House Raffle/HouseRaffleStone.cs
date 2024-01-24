@@ -127,7 +127,7 @@ public partial class HouseRaffleStone : Item
             {
                 if (value == HouseRaffleState.Active)
                 {
-                    this.Clear(_entries);
+                    ClearEntries();
                     Winner = null;
                     Deed = null;
                     Started = Core.Now;
@@ -289,7 +289,7 @@ public partial class HouseRaffleStone : Item
 
         foreach (var entry in Entries)
         {
-            if (Utility.IPMatchClassC(entry.Address, address))
+            if (entry.Address.MatchClassC(address))
             {
                 if (++tickets >= EntryLimitPerIP)
                 {
@@ -465,7 +465,7 @@ public partial class HouseRaffleStone : Item
             if (_ticketPrice == 0 || from.Backpack?.ConsumeTotal(typeof(Gold), _ticketPrice) == true ||
                 Banker.Withdraw(from, _ticketPrice))
             {
-                this.Add(Entries, new RaffleEntry(from));
+                AddToEntries(new RaffleEntry(from));
 
                 from.SendMessage(MessageHue, "You have successfully entered the plot's raffle.");
             }

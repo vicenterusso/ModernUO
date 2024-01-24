@@ -82,13 +82,8 @@ public abstract partial class BaseConfusionBlastPotion : BasePotion
 
         foreach (var mobile in map.GetMobilesInRange(loc, Radius))
         {
-            if (mobile is BaseCreature mon)
+            if (mobile is BaseCreature { Controlled: false, Summoned: false } mon)
             {
-                if (mon.Controlled || mon.Summoned)
-                {
-                    continue;
-                }
-
                 mon.Pacify(from, Core.Now + TimeSpan.FromSeconds(5.0)); // TODO check
             }
         }
@@ -120,7 +115,7 @@ public abstract partial class BaseConfusionBlastPotion : BasePotion
     {
         if (_delay.TryGetValue(m, out var timer) && timer.Next > Core.Now)
         {
-            return (int)(timer.Next - Core.Now).TotalSeconds;
+            return (int)Math.Round((timer.Next - Core.Now).TotalSeconds);
         }
 
         return 0;

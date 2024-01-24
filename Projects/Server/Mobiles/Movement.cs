@@ -19,26 +19,19 @@ public static class Movement
 {
     // Movement implementation algorithm
     public static IMovementImpl Impl { get; set; }
-    public static int WalkFootDelay { get; set; } = 400;
-    public static int RunFootDelay { get; set; } = 200;
-    public static int WalkMountDelay { get; set; } = 200;
-    public static int RunMountDelay { get; set; } = 100;
-
-    public static bool EnableFastwalkPrevention { get; set; } = true;
-    public static AccessLevel FastwalkExemptionLevel { get; set; } = AccessLevel.Counselor;
-
-    // If this is changed during runtime, then the steps array needs resizing.
-    public static int MaxSteps { get; private set; } = 3;
+    public static int WalkFootDelay { get; set; }
+    public static int RunFootDelay { get; set; }
+    public static int WalkMountDelay { get; set; }
+    public static int RunMountDelay { get; set; }
+    public static int TurnDelay { get; set; }
 
     public static void Configure()
     {
-        EnableFastwalkPrevention = ServerConfiguration.GetOrUpdateSetting("movement.enableFastWalkPrevention", EnableFastwalkPrevention);
-        MaxSteps = ServerConfiguration.GetOrUpdateSetting("movement.maxSteps", MaxSteps);
-        FastwalkExemptionLevel = ServerConfiguration.GetOrUpdateSetting("movement.fastwalkExemptionLevel", FastwalkExemptionLevel);
-        WalkFootDelay = ServerConfiguration.GetOrUpdateSetting("movement.delay.walkFoot", WalkFootDelay);
-        RunFootDelay = ServerConfiguration.GetOrUpdateSetting("movement.delay.runFoot", RunFootDelay);
-        WalkMountDelay = ServerConfiguration.GetOrUpdateSetting("movement.delay.walkMount", WalkMountDelay);
-        RunMountDelay = ServerConfiguration.GetOrUpdateSetting("movement.delay.runMount", RunMountDelay);
+        TurnDelay = ServerConfiguration.GetOrUpdateSetting("movement.delay.turn", 0);
+        WalkFootDelay = ServerConfiguration.GetOrUpdateSetting("movement.delay.walkFoot", 400);
+        RunFootDelay = ServerConfiguration.GetOrUpdateSetting("movement.delay.runFoot", 200);
+        WalkMountDelay = ServerConfiguration.GetOrUpdateSetting("movement.delay.walkMount", 200);
+        RunMountDelay = ServerConfiguration.GetOrUpdateSetting("movement.delay.runMount", 100);
     }
 
     public static bool CheckMovement(Mobile m, Direction d, out int newZ)
@@ -68,33 +61,49 @@ public static class Movement
         switch (d & Direction.Mask)
         {
             case Direction.North:
-                --y;
-                break;
+                {
+                    --y;
+                    break;
+                }
             case Direction.South:
-                ++y;
-                break;
+                {
+                    ++y;
+                    break;
+                }
             case Direction.West:
-                --x;
-                break;
+                {
+                    --x;
+                    break;
+                }
             case Direction.East:
-                ++x;
-                break;
+                {
+                    ++x;
+                    break;
+                }
             case Direction.Right:
-                ++x;
-                --y;
-                break;
+                {
+                    ++x;
+                    --y;
+                    break;
+                }
             case Direction.Left:
-                --x;
-                ++y;
-                break;
+                {
+                    --x;
+                    ++y;
+                    break;
+                }
             case Direction.Down:
-                ++x;
-                ++y;
-                break;
+                {
+                    ++x;
+                    ++y;
+                    break;
+                }
             case Direction.Up:
-                --x;
-                --y;
-                break;
+                {
+                    --x;
+                    --y;
+                    break;
+                }
         }
     }
 }
