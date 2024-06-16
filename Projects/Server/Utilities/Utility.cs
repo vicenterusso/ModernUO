@@ -12,7 +12,6 @@ using System.Text;
 using System.Xml;
 using Server.Buffers;
 using Server.Collections;
-using Server.Logging;
 using Server.Random;
 using Server.Text;
 
@@ -20,12 +19,10 @@ namespace Server;
 
 public static class Utility
 {
-    private static readonly ILogger logger = LogFactory.GetLogger(typeof(Utility));
-
     private static Dictionary<IPAddress, IPAddress> _ipAddressTable;
 
     private static SkillName[] _allSkills =
-    {
+    [
         SkillName.Alchemy,
         SkillName.Anatomy,
         SkillName.AnimalLore,
@@ -85,19 +82,19 @@ public static class Utility
         // SkillName.Mysticism,
         // SkillName.Imbuing,
         SkillName.Throwing
-    };
+    ];
 
     private static readonly SkillName[] m_CombatSkills =
-    {
+    [
         SkillName.Archery,
         SkillName.Swords,
         SkillName.Macing,
         SkillName.Fencing,
         SkillName.Wrestling
-    };
+    ];
 
     private static readonly SkillName[] m_CraftSkills =
-    {
+    [
         SkillName.Alchemy,
         SkillName.Blacksmith,
         SkillName.Fletching,
@@ -107,7 +104,7 @@ public static class Utility
         SkillName.Inscribe,
         SkillName.Tailoring,
         SkillName.Tinkering
-    };
+    ];
 
     private static readonly Stack<ConsoleColor> m_ConsoleColors = new();
 
@@ -283,50 +280,57 @@ public static class Utility
         return ip >= min && ip <= max;
     }
 
-    public static string FixHtml(string str)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static string FixHtml(this string str) => ((ReadOnlySpan<char>)str).FixHtml();
+
+    public static string FixHtml(this ReadOnlySpan<char> str)
     {
-        if (string.IsNullOrEmpty(str))
+        if (str.IsNullOrWhiteSpace())
         {
-            return str;
+            return str.ToString();
         }
 
-        var chars = str.ToPooledArray();
+        var chars = STArrayPool<char>.Shared.Rent(str.Length);
         var span = chars.AsSpan(0, str.Length);
+        str.CopyTo(span);
+
         FixHtml(span);
 
-        return span.ToString();
+        var fixedStr = span.ToString();
+        STArrayPool<char>.Shared.Return(chars);
+        return fixedStr;
     }
 
-    public static void FixHtml(Span<char> chars)
+    public static void FixHtml(this Span<char> chars)
     {
         if (chars.Length == 0)
         {
             return;
         }
 
-        ReadOnlySpan<char> invalid = stackalloc []{ '<', '>', '#' };
-        ReadOnlySpan<char> replacement = stackalloc []{ '(', ')', '-' };
+        ReadOnlySpan<char> invalid = ['<', '>', '#'];
+        ReadOnlySpan<char> replacement = ['(', ')', '-'];
 
         chars.ReplaceAny(invalid, replacement);
     }
 
-    public static PooledArraySpanFormattable FixHtmlFormattable(string str)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static PooledArraySpanFormattable FixHtmlFormattable(this string str) =>
+        ((ReadOnlySpan<char>)str).FixHtmlFormattable();
+
+    public static PooledArraySpanFormattable FixHtmlFormattable(this ReadOnlySpan<char> str)
     {
-        var chars = str.ToPooledArray();
+        var chars = STArrayPool<char>.Shared.Rent(str.Length);
         var span = chars.AsSpan(0, str.Length);
         var formattable = new PooledArraySpanFormattable(chars, str.Length);
 
-        if (!string.IsNullOrEmpty(str))
+        if (!str.IsNullOrWhiteSpace())
         {
             FixHtml(span);
         }
 
         return formattable;
     }
-
-    public static int InsensitiveCompare(string first, string second) => first.InsensitiveCompare(second);
-
-    public static bool InsensitiveStartsWith(string first, string second) => first.InsensitiveStartsWith(second);
 
     public static Direction GetDirection(Point3D from, Point3D to) => GetDirection(from.X, from.Y, to.X, to.Y);
 
@@ -670,14 +674,58 @@ public static class Utility
         InRange(p1.m_X, p1.m_Y, p2.m_X, p2.m_Y, range);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool InUpdateRange(Point2D p1, Point2D p2) => InRange(p1, p2, 18);
+    public static bool InUpdateRange(Point2D p1, Point2D p2) => InRange(p1, p2, Core.GlobalUpdateRange);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool InRange(Point3D p1, Point3D p2, int range) =>
         InRange(p1.m_X, p1.m_Y, p2.m_X, p2.m_Y, range);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool InUpdateRange(Point3D p1, Point3D p2) => InRange(p1, p2, 18);
+    public static bool InUpdateRange(Point3D p1, Point3D p2) => InRange(p1, p2, Core.GlobalUpdateRange);
+
+    // Optimized method for handling 50% random chances in succession up to a maximum
+    public static int CoinFlips(int amount, int maximum)
+    {
+        var heads = 0;
+        while (amount > 0)
+        {
+            // Range is 2^amount exclusively, maximum of 62 bits can be used
+            ulong num = amount >= 62
+                ? (ulong)BuiltInRng.NextLong()
+                : (ulong)BuiltInRng.Next(1L << amount);
+
+            heads += BitOperations.PopCount(num);
+
+            if (heads >= maximum)
+            {
+                return maximum;
+            }
+
+            // 64 bits minus sign bit and exclusive maximum leaves 62 bits
+            amount -= 62;
+        }
+
+        return heads;
+    }
+
+    public static int CoinFlips(int amount)
+    {
+        var heads = 0;
+        while (amount > 0)
+        {
+            // Range is 2^amount exclusively, maximum of 62 bits can be used
+            ulong num = amount >= 62
+                ? (ulong)BuiltInRng.NextLong()
+                : (ulong)BuiltInRng.Next(1L << amount);
+
+            heads += BitOperations.PopCount(num);
+
+            // 64 bits minus sign bit and exclusive maximum leaves 62 bits
+            amount -= 62;
+        }
+
+        return heads;
+    }
 
     public static int Dice(int amount, int sides, int bonus)
     {
@@ -686,11 +734,19 @@ public static class Utility
             return 0;
         }
 
-        var total = 0;
+        int total;
 
-        for (var i = 0; i < amount; ++i)
+        if (sides == 2)
         {
-            total += BuiltInRng.Next(1, sides);
+            total = CoinFlips(amount);
+        }
+        else
+        {
+            total = 0;
+            for (var i = 0; i < amount; ++i)
+            {
+                total += BuiltInRng.Next(1, sides);
+            }
         }
 
         return total + bonus;
@@ -730,8 +786,9 @@ public static class Utility
         do
         {
             var rand = Random(length);
-            if (!(list[rand] && (list[rand] = true)))
+            if (!list[rand])
             {
+                list[rand] = true;
                 sampleList[i++] = source[rand];
             }
         } while (i < count);
@@ -743,7 +800,7 @@ public static class Utility
     {
         if (count <= 0)
         {
-            return new List<T>();
+            return [];
         }
 
         var length = source.Count;
@@ -756,8 +813,9 @@ public static class Utility
         do
         {
             var rand = Random(length);
-            if (!(list[rand] && (list[rand] = true)))
+            if (!list[rand])
             {
+                list[rand] = true;
                 sampleList[i++] = source[rand];
             }
         } while (i < count);
@@ -780,8 +838,9 @@ public static class Utility
         do
         {
             var rand = Random(length);
-            if (!(list[rand] && (list[rand] = true)))
+            if (!list[rand])
             {
+                list[rand] = true;
                 dest.Add(source[rand]);
             }
         } while (++i < count);
@@ -1173,14 +1232,14 @@ public static class Utility
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Add<T>(ref List<T> list, T value)
     {
-        list ??= new List<T>();
+        list ??= [];
         list.Add(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Add<T>(ref HashSet<T> set, T value)
     {
-        set ??= new HashSet<T>();
+        set ??= [];
         set.Add(value);
     }
 
@@ -1452,8 +1511,7 @@ public static class Utility
         };
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNullOrWhiteSpace(this ReadOnlySpan<char> span) =>
-        span == default || span.IsEmpty || span.IsWhiteSpace();
+    public static bool IsNullOrWhiteSpace(this ReadOnlySpan<char> span) => span.IsEmpty || span.IsWhiteSpace();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool InTypeList<T>(this T obj, Type[] types) => obj.GetType().InTypeList(types);
@@ -1469,5 +1527,29 @@ public static class Utility
         }
 
         return false;
+    }
+
+    public static int C16232(this int c16)
+    {
+        c16 &= 0x7FFF;
+
+        var r = ((c16 >> 10) & 0x1F) << 3;
+        var g = ((c16 >> 05) & 0x1F) << 3;
+        var b = (c16 & 0x1F) << 3;
+
+        return (r << 16) | (g << 8) | b;
+    }
+
+    public static int C16216(this int c16) => c16 & 0x7FFF;
+
+    public static int C32216(this int c32)
+    {
+        c32 &= 0xFFFFFF;
+
+        var r = ((c32 >> 16) & 0xFF) >> 3;
+        var g = ((c32 >> 08) & 0xFF) >> 3;
+        var b = (c32 & 0xFF) >> 3;
+
+        return (r << 10) | (g << 5) | b;
     }
 }

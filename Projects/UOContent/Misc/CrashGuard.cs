@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using Server.Accounting;
 using Server.Logging;
@@ -49,7 +48,8 @@ namespace Server.Misc
 
             if (RestartServer)
             {
-                Restart(e);
+                e.Close = true;
+                Core.Kill(true);
             }
         }
 
@@ -58,23 +58,6 @@ namespace Server.Misc
             logger.Information("Sending crash email");
 
             Email.SendCrashEmail(filePath);
-        }
-
-        private static void Restart(ServerCrashedEventArgs e)
-        {
-            logger.Information("Restarting");
-
-            try
-            {
-                Process.Start(Core.Assembly.Location, Core.Arguments);
-                logger.Information("Restart done");
-
-                e.Close = true;
-            }
-            catch
-            {
-                logger.Error("Restart failed");
-            }
         }
 
         private static void DirectoryCopy(string sourceDirName, string destDirName)

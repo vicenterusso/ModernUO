@@ -39,6 +39,7 @@ public interface IGenericWriter
     void Write(bool value);
     void Write(Serial serial);
     void Write(Type type);
+    void Write(decimal value);
 
     void Write(DateTime value)
     {
@@ -79,20 +80,12 @@ public interface IGenericWriter
         Write((byte)bytesWritten);
         Write(stack[..bytesWritten]);
     }
+
     void Write(TimeSpan value)
     {
         Write(value.Ticks);
     }
 
-    public void Write(decimal value)
-    {
-        var bits = decimal.GetBits(value);
-
-        for (var i = 0; i < 4; ++i)
-        {
-            Write(bits[i]);
-        }
-    }
     void WriteEncodedInt(int value)
     {
         var v = (uint)value;
@@ -128,6 +121,8 @@ public interface IGenericWriter
     }
     void Write(Map value) => Write((byte)(value?.MapIndex ?? 0xFF));
     void Write(Race value) => Write((byte)(value?.RaceIndex ?? 0xFF));
+    void Write(byte[] bytes);
+    void Write(byte[] bytes, int offset, int count);
     void Write(ReadOnlySpan<byte> bytes);
     unsafe void WriteEnum<T>(T value) where T : unmanaged, Enum
     {

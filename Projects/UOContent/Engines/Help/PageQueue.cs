@@ -34,7 +34,7 @@ namespace Server.Engines.Help
         {
             Sender = sender;
             Sent = Core.Now;
-            Message = Utility.FixHtml(message);
+            Message = message.FixHtml();
             Type = type;
             PageLocation = sender.Location;
             PageMap = sender.Map;
@@ -121,7 +121,7 @@ namespace Server.Engines.Help
 
         public static List<PageEntry> List { get; } = new();
 
-        public static void Initialize()
+        public static void Configure()
         {
             CommandSystem.Register("Pages", AccessLevel.Counselor, Pages_OnCommand);
         }
