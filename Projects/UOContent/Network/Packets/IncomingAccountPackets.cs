@@ -350,6 +350,8 @@ public static class IncomingAccountPackets
         PreventInaccess.OnLogin(m);
         TwistedWealdDesertRegion.OnLogin(m);
         RewardSystem.OnLogin(m);
+
+
     }
 
     private static int GenerateAuthID(this NetState state)
