@@ -460,7 +460,7 @@ public class Skills
     public Skills(Mobile owner)
     {
         Owner = owner;
-        Cap = 7000;
+        Cap = 7500;
 
         var info = SkillInfo.Table;
 

@@ -47,11 +47,11 @@ namespace Server.Gumps
 
         }
 
-        public override void OnResponse(NetState sender, RelayInfo info)
+        public override void OnResponse(NetState sender, in RelayInfo relayInfo)
         {
             Mobile m = sender.Mobile;
 
-            switch (info.ButtonID)
+            switch (relayInfo.ButtonID)
             {
                 case 1:
 
