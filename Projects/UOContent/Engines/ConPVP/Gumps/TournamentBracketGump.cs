@@ -44,6 +44,9 @@ namespace Server.Engines.ConPVP
             m_Object = obj;
             m_PerPage = 12;
 
+            Console.WriteLine("--------- new TournamentBracketGump");
+            Console.WriteLine(m_List);
+
             switch (type)
             {
                 case TourneyBracketGumpType.Index:
@@ -217,9 +220,9 @@ namespace Server.Engines.ConPVP
 
                         if (tourney.SuddenDeath > TimeSpan.Zero)
                         {
-                            sdText = tourney.SuddenDeathRounds > 0 ?
-                                $"Sudden Death: {(int)tourney.SuddenDeath.TotalMinutes}:{tourney.SuddenDeath.Seconds:D2} (first {tourney.SuddenDeathRounds} rounds)" :
-                                $"Sudden Death: {(int)tourney.SuddenDeath.TotalMinutes}:{tourney.SuddenDeath.Seconds:D2} (all rounds)";
+                            sdText = tourney.SuddenDeathRounds > 0
+                                ? $"Sudden Death: {(int)tourney.SuddenDeath.TotalMinutes}:{tourney.SuddenDeath.Seconds:D2} (first {tourney.SuddenDeathRounds} rounds)"
+                                : $"Sudden Death: {(int)tourney.SuddenDeath.TotalMinutes}:{tourney.SuddenDeath.Seconds:D2} (all rounds)";
                         }
                         else
                         {
@@ -274,13 +277,29 @@ namespace Server.Engines.ConPVP
                         AddPage(0);
                         AddBackground(0, 0, 300, 300, 9380);
 
+                        Console.WriteLine("Participant_List 1");
                         var pList = m_List?.SafeConvertList<object, TourneyParticipant>()
                                     ?? new List<TourneyParticipant>(tourney.Participants);
+
+                        var listCount = pList?.Count ?? 0;
 
                         AddLeftArrow(25, 11, ToButtonID(0, 0));
                         AddHtml(25, 35, 250, 20, $"{pList.Count} Participant{(pList.Count == 1 ? "" : "s")}".Center());
 
-                        StartPage(out var index, out var count, out var y, 12);
+                        Console.WriteLine("Participant_List 2");
+                        Console.WriteLine(pList);
+                        Console.WriteLine("listCount: " + listCount);
+                        Console.WriteLine("TourneyType: " + m_Tournament.TourneyType);
+
+
+                        //StartPage(out var index, out var count, out var y, 12);
+                        StartPage(
+                            index: out var index,
+                            count: out var count,
+                            y: out var y,
+                            listCount: listCount,
+                            perPage: 12
+                        );
 
                         for (var i = 0; i < count; ++i, y += 18)
                         {
@@ -407,10 +426,23 @@ namespace Server.Engines.ConPVP
                         AddLeftArrow(25, 11, ToButtonID(0, 0));
                         AddHtml(25, 35, 250, 20, "Rounds".Center());
 
-                        StartPage(out var index, out var count, out var y, 12);
+                        //StartPage(out var index, out var count, out var y, 12);
+                        var roundList = m_List != null
+                            ? m_List.SafeConvertList<object, PyramidLevel>()
+                            : new List<PyramidLevel>(tourney.Pyramid.Levels);
+
+                        StartPage(
+                            index: out var index,
+                            count: out var count,
+                            y: out var y,
+                            listCount: roundList.Count,
+                            perPage: 12
+                        );
 
                         for (var i = 0; i < count; ++i, y += 18)
                         {
+                            PyramidLevel level = (PyramidLevel)m_List[index + i];
+
                             AddRightArrow(25, y, ToButtonID(3, index + i), $"Round #{index + i + 1}");
                         }
 
@@ -442,7 +474,14 @@ namespace Server.Engines.ConPVP
 
                         AddHtml(25, 73, 200, 20, $"{matchesList.Count} Match{(matchesList.Count == 1 ? "" : "es")}");
 
-                        StartPage(out var index, out var count, out var y, 10);
+                        //StartPage(out var index, out var count, out var y, 10);
+                        StartPage(
+                            index: out var index,
+                            count: out var count,
+                            y: out var y,
+                            listCount: matchesList.Count,
+                            perPage: 12
+                        );
 
                         for (var i = 0; i < count; ++i, y += 18)
                         {
@@ -486,7 +525,8 @@ namespace Server.Engines.ConPVP
                                 }
                             }
                             else if (m_Tournament.EventController != null ||
-                                     m_Tournament.TourneyType is TourneyType.RandomTeam or TourneyType.RedVsBlue or TourneyType.Faction)
+                                     m_Tournament.TourneyType is TourneyType.RandomTeam or TourneyType.RedVsBlue
+                                         or TourneyType.Faction)
                             {
                                 for (var j = 0; j < match.Participants.Count; ++j)
                                 {
@@ -599,7 +639,8 @@ namespace Server.Engines.ConPVP
                             }
                         }
                         else if (m_Tournament.EventController != null ||
-                                 m_Tournament.TourneyType is TourneyType.RandomTeam or TourneyType.RedVsBlue or TourneyType.Faction)
+                                 m_Tournament.TourneyType is TourneyType.RandomTeam or TourneyType.RedVsBlue
+                                     or TourneyType.Faction)
                         {
                             for (var i = 0; i < match.Participants.Count; ++i)
                             {
@@ -743,12 +784,21 @@ namespace Server.Engines.ConPVP
             return bid >= 1;
         }
 
-        public void StartPage(out int index, out int count, out int y, int perPage)
+        //public void StartPage(out int index, out int count, out int y, int perPage)
+        public void StartPage(out int index, out int count, out int y, int listCount, int perPage)
         {
             m_PerPage = perPage;
 
             index = Math.Max(m_Page * perPage, 0);
-            count = Math.Clamp(m_List.Count - index, 0, perPage);
+            //count = Math.Clamp(m_List.Count - index, 0, perPage);
+            count = Math.Clamp(listCount, 0, perPage);
+
+            Console.WriteLine("StartPage..." + listCount);
+            Console.WriteLine(m_List);
+            Console.WriteLine("/StartPage...");
+
+            Console.WriteLine("count " + count);
+            Console.WriteLine("/StartPage...");
 
             y = 53 + (12 - perPage) * 18;
 
@@ -757,7 +807,8 @@ namespace Server.Engines.ConPVP
                 AddLeftArrow(242, 35, ToButtonID(1, 0));
             }
 
-            if ((m_Page + 1) * perPage < m_List.Count)
+            //            if ((m_Page + 1) * perPage < m_List.Count)
+            if ((m_Page + 1) * perPage < listCount)
             {
                 AddRightArrow(260, 35, ToButtonID(1, 1));
             }
@@ -769,6 +820,10 @@ namespace Server.Engines.ConPVP
             {
                 return;
             }
+
+            Console.WriteLine("OnResponse......");
+            Console.WriteLine(m_List);
+            Console.WriteLine("/.....");
 
             switch (type)
             {
@@ -909,7 +964,11 @@ namespace Server.Engines.ConPVP
                             break;
                         }
 
-                        if (index >= 0 && index < m_List.Count)
+                        var pList = m_List?.SafeConvertList<object, TourneyParticipant>()
+                                    ?? new List<TourneyParticipant>(m_Tournament.Participants);
+
+                        // if (index >= 0 && index < m_List.Count)
+                        if (index >= 0 && index < pList.Count)
                         {
                             m_From.SendGump(
                                 new TournamentBracketGump(
@@ -918,7 +977,7 @@ namespace Server.Engines.ConPVP
                                     TourneyBracketGumpType.Participant_Info,
                                     null,
                                     0,
-                                    m_List[index]
+                                    pList[index]
                                 )
                             );
                         }

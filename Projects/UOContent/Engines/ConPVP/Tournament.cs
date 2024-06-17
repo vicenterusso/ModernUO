@@ -50,6 +50,8 @@ namespace Server.Engines.ConPVP
         {
             var version = reader.ReadEncodedInt();
 
+            Console.WriteLine("Tournament Constructor. version: " + version);
+
             switch (version)
             {
                 case 5:
