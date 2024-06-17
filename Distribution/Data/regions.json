@@ -4198,5 +4198,15 @@
     "Priority": 50,
     "Area": [{ "x1": 435, "y1": 2270, "z1": -25, "x2": 675, "y2": 2490, "z2": 128 }],
     "GoLocation": { "x": 542, "y": 2473, "z": 0 }
+  },
+  {
+    "$type": "ArenaRegion",
+    "Name": "ArenaTest",
+    "Map": "Trammel",
+    "Priority": 80,
+    "Music": "Britain1",
+    "Parent": { "Name": "Nujel'm", "Map": "Trammel" },
+    "Area": [ { "x1": 3720, "y1": 1352, "z1": -50, "x2": 3737, "y2": 1369, "z2": 50 } ],
+    "GoLocation": { "x": 3729, "y": 1361, "z": 5 }
   }
 ]
